@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">
+<properties>
+	<comment>Example properties file</comment>
+	<entry key="consumer.key">TradeMe Application Consumer Key</entry>
+	<entry key="consumer.secret">TradeMe Application Consumer Secret</entry>
+	<entry key="search.interval">600</entry>
+	<entry key="search.parameters">Search String</entry>
+</properties>
