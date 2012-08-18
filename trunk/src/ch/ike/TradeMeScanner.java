@@ -17,6 +17,12 @@ import java.util.Properties;
 import java.util.prefs.BackingStoreException;
 import java.util.prefs.Preferences;
 
+import javax.mail.Message;
+import javax.mail.MessagingException;
+import javax.mail.Session;
+import javax.mail.Transport;
+import javax.mail.internet.InternetAddress;
+import javax.mail.internet.MimeMessage;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
@@ -55,11 +61,34 @@ public class TradeMeScanner implements Runnable {
 	private static final XPathFactory xPathFactory = XPathFactory.newInstance();
 
 	public static void main(String[] args) {
-		TradeMeScanner self = new TradeMeScanner(args);
-		self.main();
+		TradeMeScanner self = new TradeMeScanner();
+
+		if ((args.length > 0) && "deauthorise".equals(args[0])) {
+			self.deauthorise();
+		} else if ((args.length > 0) && "clear_cache".equals(args[0])) {
+			self.clearCache();
+		} else {
+			self.runScanner();
+		}
 	}
 
-	private boolean stopped = false;
+	private void deauthorise() {
+		try {
+			prefs.node(ACCESS_TOKEN).removeNode();
+			prefs.flush();
+		} catch (BackingStoreException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+	private void clearCache() {
+		try {
+			seenItems.removeNode();
+			prefs.flush();
+		} catch (BackingStoreException e) {
+			throw new RuntimeException(e);
+		}
+	}
 
 	private final Properties props;
 	private final Preferences prefs;
@@ -70,7 +99,11 @@ public class TradeMeScanner implements Runnable {
 	private final XPathExpression itemExpr;
 	private final XPathExpression listingIdExpr;
 
-	public TradeMeScanner(String[] args) {
+	private boolean stopped = false;
+	private OAuthService service;
+	private Token accessToken;
+
+	public TradeMeScanner() {
 		props = new Properties();
 		FileInputStream in;
 		try {
@@ -112,7 +145,13 @@ public class TradeMeScanner implements Runnable {
 		}
 	}
 
-	private void main() {
+	private void runScanner() {
+		service = new ServiceBuilder().provider(TradeMeApi.class)
+				.apiKey(props.getProperty("consumer.key"))
+				.apiSecret(props.getProperty("consumer.secret")).build();
+
+		checkAuthorisation();
+
 		Thread loop = new Thread(this);
 		loop.start();
 
@@ -139,18 +178,103 @@ public class TradeMeScanner implements Runnable {
 	}
 
 	public void run() {
-		OAuthService service = new ServiceBuilder().provider(TradeMeApi.class)
-				.apiKey(props.getProperty("consumer.key"))
-				.apiSecret(props.getProperty("consumer.secret")).build();
+		int interval = Integer.parseInt(props.getProperty("search.interval"));
 
-		Token accessToken = null;
+		while (!stopped) {
+			OAuthRequest request = new OAuthRequest(Verb.GET,
+					"https://api.trademe.co.nz/v1/Search/General.xml?"
+							+ props.getProperty("search.parameters"));
+			service.signRequest(accessToken, request);
+
+			Response response = request.send();
+
+			InputSource is = new InputSource(new StringReader(
+					response.getBody()));
+			Document document;
+			try {
+				document = docBuilder.parse(is);
+			} catch (SAXException e) {
+				throw new RuntimeException(e);
+			} catch (IOException e) {
+				throw new RuntimeException(e);
+			}
+
+			NodeList items;
+			try {
+				items = (NodeList) itemExpr.evaluate(document,
+						XPathConstants.NODESET);
+			} catch (XPathExpressionException e) {
+				throw new RuntimeException(e);
+			}
+
+			List<String> itemList;
+			try {
+				itemList = new ArrayList<String>(
+						Arrays.asList(seenItems.keys()));
+			} catch (BackingStoreException e) {
+				throw new RuntimeException(e);
+			}
+
+			StringBuffer message = new StringBuffer();
+			int index = 0;
+			int newItems = 0;
+			while (index < items.getLength()) {
+				Node item = items.item(index);
+				String listingId;
+				try {
+					listingId = (String) listingIdExpr.evaluate(item,
+							XPathConstants.STRING);
+				} catch (XPathExpressionException e) {
+					throw new RuntimeException(e);
+				}
+				if (!itemList.contains(listingId)) {
+					message.append(format(item) + "\n");
+
+					newItems = newItems + 1;
+					seenItems.put(listingId, new Date().toString());
+				} else {
+					itemList.remove(listingId);
+				}
+
+				index = index + 1;
+			}
+
+			if (newItems > 0) {
+				sendEmail(message.toString());
+			}
+
+			System.out
+					.println(new Date().toString() + ": Found "
+							+ items.getLength() + " items, " + newItems
+							+ " new items.");
+
+			for (String itemId : itemList) {
+				seenItems.remove(itemId);
+			}
+
+			try {
+				seenItems.flush();
+			} catch (BackingStoreException e) {
+				throw new RuntimeException(e);
+			}
+
+			try {
+				Thread.sleep(1000 * interval);
+			} catch (InterruptedException e) {
+			}
+		}
+
+		System.out.println("Ended.");
+	}
+
+	private void checkAuthorisation() {
 		try {
 			if (prefs.nodeExists(ACCESS_TOKEN)) {
 				accessToken = new Token(prefs.node(ACCESS_TOKEN).get(TOKEN,
 						null), prefs.node(ACCESS_TOKEN).get(SECRET, null));
 			} else {
 				System.out
-						.println("This application needs authorization first.");
+						.println("This application needs authorisation first.");
 
 				Token requestToken = service.getRequestToken();
 
@@ -182,7 +306,7 @@ public class TradeMeScanner implements Runnable {
 						Verifier v = new Verifier(pin);
 						accessToken = service.getAccessToken(requestToken, v);
 					} catch (OAuthException e) {
-						System.out.println("Exception during authentication: "
+						System.out.println("Exception during authorisation: "
 								+ e.getMessage());
 						System.out.println("Retrying");
 					}
@@ -193,91 +317,11 @@ public class TradeMeScanner implements Runnable {
 				prefs.node(ACCESS_TOKEN).put(SECRET, accessToken.getSecret());
 				prefs.flush();
 
-				System.out.println("Authorization successful.");
+				System.out.println("Authorisation successful.");
 			}
 		} catch (BackingStoreException e) {
 			throw new RuntimeException(e);
 		}
-
-		int interval = Integer.parseInt(props.getProperty("search.interval"));
-
-		while (!stopped) {
-			OAuthRequest request = new OAuthRequest(Verb.GET,
-					"https://api.trademe.co.nz/v1/Search/General.xml?"
-							+ props.getProperty("search.parameters"));
-			service.signRequest(accessToken, request);
-
-			Response response = request.send();
-
-			InputSource is = new InputSource(new StringReader(
-					response.getBody()));
-			Document document;
-			try {
-				document = docBuilder.parse(is);
-			} catch (SAXException e) {
-				throw new RuntimeException(e);
-			} catch (IOException e) {
-				throw new RuntimeException(e);
-			}
-
-			NodeList items;
-			try {
-				items = (NodeList) itemExpr.evaluate(document,
-						XPathConstants.NODESET);
-			} catch (XPathExpressionException e) {
-				throw new RuntimeException(e);
-			}
-
-			System.out.println(new Date().toString() + ": Got " + items.getLength() + " items.");
-			System.out.println();
-
-			List<String> seenList;
-			try {
-				seenList = new ArrayList<String>(
-						Arrays.asList(seenItems.keys()));
-			} catch (BackingStoreException e) {
-				throw new RuntimeException(e);
-			}
-
-			int index = 0;
-			while (index < items.getLength()) {
-				Node item = items.item(index);
-				String listingId;
-				try {
-					listingId = (String) listingIdExpr.evaluate(item,
-							XPathConstants.STRING);
-				} catch (XPathExpressionException e) {
-					throw new RuntimeException(e);
-				}
-				if (!seenList.contains(listingId)) {
-					System.out.println(format(item));
-					System.out.println();
-
-					seenItems.put(listingId, new Date().toString());
-				} else {
-					seenList.remove(listingId);
-				}
-
-				index = index + 1;
-			}
-
-			for (String itemId : seenList) {
-				seenItems.remove(itemId);
-			}
-
-			try {
-				seenItems.flush();
-			} catch (BackingStoreException e) {
-				throw new RuntimeException(e);
-			}
-
-			try {
-				Thread.sleep(1000 * interval);
-			} catch (InterruptedException e) {
-			}
-		}
-		
-		System.out.println("Ended.");
 	}
 
 	private String format(Node node) {
@@ -296,4 +340,25 @@ public class TradeMeScanner implements Runnable {
 		}
 	}
 
+	private void sendEmail(String message) {
+		Properties properties = System.getProperties();
+		properties.setProperty("mail.smtp.host",
+				props.getProperty("email.smtphost"));
+		Session session = Session.getDefaultInstance(properties);
+		MimeMessage email = new MimeMessage(session);
+
+		try {
+			email.setFrom(new InternetAddress(props.getProperty("email.from")));
+			email.addRecipient(Message.RecipientType.TO, new InternetAddress(
+					props.getProperty("email.to")));
+
+			email.setSubject("New TradeMe Listings Found");
+
+			email.setText(message);
+
+			Transport.send(email);
+		} catch (MessagingException e) {
+			throw new RuntimeException(e);
+		}
+	}
 }

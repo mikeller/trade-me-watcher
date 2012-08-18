@@ -6,4 +6,7 @@
 	<entry key="consumer.secret">TradeMe Application Consumer Secret</entry>
 	<entry key="search.interval">600</entry>
 	<entry key="search.parameters">Search String</entry>
+	<entry key="email.smtphost">Your provider's SMTP host</entry>
+	<entry key="email.from">From address</entry>
+	<entry key="email.to">To address</entry>
 </properties>
