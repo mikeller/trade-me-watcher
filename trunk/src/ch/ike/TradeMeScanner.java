@@ -147,7 +147,7 @@ public class TradeMeScanner implements Runnable {
 	    Set<String> expiredItems = new HashSet<String>(allItems);
 	    Calendar now = GregorianCalendar.getInstance();
 	    StringBuffer message = new StringBuffer();
-	    int newItems = 0;
+	    boolean itemsFound = false;
 
 	    for (String parameters : searches.keySet()) {
 		Response response = connector
@@ -156,14 +156,16 @@ public class TradeMeScanner implements Runnable {
 
 		NodeList items = resultHandler
 			.parseResponse(response.getBody());
-		
-		message.append("New items for \"" + searches.get(parameters) + "\":\n\n");
+
+		message.append("New items for \"" + searches.get(parameters)
+			+ "\":\n\n");
 
 		index = 0;
+		int newItems = 0;
 		while (index < items.getLength()) {
 		    Node item = items.item(index);
 		    String listingId = resultHandler.getListingId(item);
-		
+
 		    expiredItems.remove(listingId);
 		    seenItems.put(listingId,
 			    DatatypeConverter.printDateTime(now));
@@ -176,14 +178,19 @@ public class TradeMeScanner implements Runnable {
 
 		    index = index + 1;
 		}
-
-		message.append("\n");
+		
+		if (newItems > 0) {
+		    message.append("\n");
+		    
+		    itemsFound = true;
+		}
 
 		System.out.println("Found " + items.getLength() + " items, "
-			+ newItems + " new items for search \"" + searches.get(parameters) + "\".");
+			+ newItems + " new items for search \""
+			+ searches.get(parameters) + "\".");
 	    }
 
-	    if (newItems > 0) {
+	    if (itemsFound) {
 		emailProvider.sendEmail(message.toString());
 	    }
 
