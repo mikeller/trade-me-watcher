@@ -34,11 +34,24 @@ import com.sun.org.apache.xml.internal.serialize.XMLSerializer;
 
 public class TradeMeScanner implements Runnable {
 
-    public static void main(String[] args) {
+    private final Properties props;
+    private final Preferences prefs;
+    private final Preferences seenItems;
+
+    private ResultHandler resultHandler;
+    private final TradeMeConnector connector;
+
+    private EmailProvider emailProvider;
+
+    private boolean stopped;
+
+   public static void main(String[] args) {
 	TradeMeScanner self = new TradeMeScanner();
 
 	if ((args.length > 0) && "deauthorise".equals(args[0])) {
 	    self.connector.deauthoriseUser();
+	} else if ((args.length > 0) && "get_access_token".equals(args[0])) {
+		self.connector.printAccessToken();
 	} else if ((args.length > 0) && "clear_cache".equals(args[0])) {
 	    self.clearCache();
 	} else {
@@ -54,17 +67,6 @@ public class TradeMeScanner implements Runnable {
 	    throw new RuntimeException(e);
 	}
     }
-
-    final Properties props;
-    private final Preferences prefs;
-    private final Preferences seenItems;
-
-    private ResultHandler resultHandler;
-    private final TradeMeConnector connector;
-
-    private EmailProvider emailProvider;
-
-    private boolean stopped;
 
     public TradeMeScanner() {
 	props = new Properties();
