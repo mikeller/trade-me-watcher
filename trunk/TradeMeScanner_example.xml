@@ -4,6 +4,8 @@
 	<comment>Example properties file</comment>
 	<entry key="consumer.key">TradeMe Application Consumer Key</entry>
 	<entry key="consumer.secret">TradeMe Application Consumer Secret</entry>
+	<entry key="access.token">TradeMe User Access Token (optional)</entry>
+	<entry key="access.secret">TradeMe User Access Secret (optional)</entry>
 	<entry key="search.interval">600</entry>
 	<entry key="search.parameters">Search String</entry>
 	<entry key="email.smtphost">Your provider's SMTP host</entry>
