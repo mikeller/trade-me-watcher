@@ -7,15 +7,19 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.StringWriter;
 import java.io.Writer;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Date;
+import java.util.Calendar;
+import java.util.GregorianCalendar;
+import java.util.HashSet;
+import java.util.Hashtable;
 import java.util.InvalidPropertiesFormatException;
-import java.util.List;
+import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.prefs.BackingStoreException;
 import java.util.prefs.Preferences;
 
+import javax.xml.bind.DatatypeConverter;
 
 import nz.co.trademe.TradeMeApi;
 import nz.co.trademe.TradeMeConnector;
@@ -79,13 +83,13 @@ public class TradeMeScanner implements Runnable {
 	prefs = Preferences.userNodeForPackage(this.getClass());
 
 	emailProvider = new EmailProvider(props);
-	
+
 	connector = new TradeMeConnector(props, prefs);
 
 	seenItems = prefs.node("seen_items");
 
 	resultHandler = new ResultHandler();
-	
+
 	stopped = false;
     }
 
@@ -123,51 +127,73 @@ public class TradeMeScanner implements Runnable {
 
     public void run() {
 	int interval = Integer.parseInt(props.getProperty("search.interval"));
+	Map<String, String> searches = new Hashtable<String, String>();
+	int index = 0;
+	while (props.containsKey("search." + index + ".parameters")) {
+	    searches.put(props.getProperty("search." + index + ".parameters"),
+		    props.getProperty("search." + index + ".title",
+			    "<unspecified>"));
+
+	    index = index + 1;
+	}
 
 	while (!stopped) {
-	    Response response = connector
-		    .sendGetRequest("https://api.trademe.co.nz/v1/Search/General.xml?"
-			    + props.getProperty("search.parameters"));
-
-	    NodeList items = resultHandler.parseResponse(response.getBody());
-
-	    List<String> itemList;
+	    Set<String> allItems;
 	    try {
-		itemList = new ArrayList<String>(
-			Arrays.asList(seenItems.keys()));
+		allItems = new HashSet<String>(Arrays.asList(seenItems.keys()));
 	    } catch (BackingStoreException e) {
 		throw new RuntimeException(e);
 	    }
-
+	    Set<String> expiredItems = new HashSet<String>(allItems);
+	    Calendar now = GregorianCalendar.getInstance();
 	    StringBuffer message = new StringBuffer();
-	    int index = 0;
 	    int newItems = 0;
-	    while (index < items.getLength()) {
-		Node item = items.item(index);
-		String listingId = resultHandler.getListingId(item);
-		if (!itemList.contains(listingId)) {
-		    message.append(format(item) + "\n");
 
-		    newItems = newItems + 1;
-		    seenItems.put(listingId, new Date().toString());
-		} else {
-		    itemList.remove(listingId);
+	    for (String parameters : searches.keySet()) {
+		Response response = connector
+			.sendGetRequest("https://api.trademe.co.nz/v1/Search/General.xml?"
+				+ parameters);
+
+		NodeList items = resultHandler
+			.parseResponse(response.getBody());
+		
+		message.append("New items for \"" + searches.get(parameters) + "\":\n\n");
+
+		index = 0;
+		while (index < items.getLength()) {
+		    Node item = items.item(index);
+		    String listingId = resultHandler.getListingId(item);
+		
+		    expiredItems.remove(listingId);
+		    seenItems.put(listingId,
+			    DatatypeConverter.printDateTime(now));
+		    if (!allItems.contains(listingId)) {
+			allItems.add(listingId);
+			message.append(format(item) + "\n");
+
+			newItems = newItems + 1;
+		    }
+
+		    index = index + 1;
 		}
 
-		index = index + 1;
+		message.append("\n");
+
+		System.out.println("Found " + items.getLength() + " items, "
+			+ newItems + " new items for search \"" + searches.get(parameters) + "\".");
 	    }
 
 	    if (newItems > 0) {
 		emailProvider.sendEmail(message.toString());
 	    }
 
-	    System.out
-		    .println("Found "
-			    + items.getLength() + " items, " + newItems
-			    + " new items, " + itemList.size() + " items to remove.");
-
-	    for (String itemId : itemList) {
-		seenItems.remove(itemId);
+	    for (String itemId : expiredItems) {
+		Calendar lastSeen = DatatypeConverter.parseDateTime(seenItems
+			.get(itemId, null));
+		lastSeen.add(Calendar.DATE, 1);
+		if (lastSeen.before(now)) {
+		    seenItems.remove(itemId);
+		}
 	    }
 
 	    try {
