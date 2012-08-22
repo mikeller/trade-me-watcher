@@ -43,19 +43,23 @@ public class TradeMeScanner implements Runnable {
 
     private EmailProvider emailProvider;
 
-    private boolean stopped;
+    private volatile boolean stopped;
 
-   public static void main(String[] args) {
+    public static void main(String[] args) {
 	TradeMeScanner self = new TradeMeScanner();
 
 	if ((args.length > 0) && "deauthorise".equals(args[0])) {
 	    self.connector.deauthoriseUser();
 	} else if ((args.length > 0) && "get_access_token".equals(args[0])) {
-		self.connector.printAccessToken();
+	    self.connector.printAccessToken();
 	} else if ((args.length > 0) && "clear_cache".equals(args[0])) {
 	    self.clearCache();
 	} else {
-	    self.runScanner();
+	    boolean interactive = false;
+	    if ((args.length > 0) && "interactive".equals(args[0])) {
+		interactive = true;
+	    }
+	    self.runScanner(interactive);
 	}
     }
 
@@ -95,48 +99,46 @@ public class TradeMeScanner implements Runnable {
 	stopped = false;
     }
 
-    private void runScanner() {
+    private void runScanner(boolean interactive) {
+	final Thread mainThread = Thread.currentThread();
+	Runtime.getRuntime().addShutdownHook(new Thread() {
+	    public void run() {
+		stopped = true;
+		mainThread.interrupt();
+
+		try {
+		    mainThread.join();
+		} catch (InterruptedException e) {
+		}
+	    }
+	});
+
+	int interval = Integer.parseInt(props.getProperty("search.interval"));
+	System.out.println("Set search interval to " + interval + " seconds.");
+
+	Map<String, String> searches = new Hashtable<String, String>();
+	int index = 0;
+	while (props.containsKey("search." + index + ".parameters")) {
+	    String parameters = props.getProperty("search." + index
+		    + ".parameters");
+	    String title = props.getProperty("search." + index + ".title",
+		    "<unspecified>");
+	    searches.put(parameters, title);
+	    System.out.println("Added search " + title + " with parameters "
+		    + parameters);
+
+	    index = index + 1;
+	}
+
 	connector.service = new ServiceBuilder().provider(TradeMeApi.class)
 		.apiKey(props.getProperty("consumer.key"))
 		.apiSecret(props.getProperty("consumer.secret")).build();
 
 	connector.checkAuthorisation();
 
-	Thread loop = new Thread(this);
-	loop.start();
-
-	String input = "";
-	BufferedReader inReader = new BufferedReader(new InputStreamReader(
-		System.in));
-	while ((input != null) && !input.equals("x")) {
-	    try {
-		input = inReader.readLine();
-	    } catch (IOException e) {
-		throw new RuntimeException(e);
-	    }
-	}
-
-	System.out.println("Terminating...");
-
-	stopped = true;
-
-	loop.interrupt();
-	try {
-	    loop.join();
-	} catch (InterruptedException e) {
-	}
-    }
-
-    public void run() {
-	int interval = Integer.parseInt(props.getProperty("search.interval"));
-	Map<String, String> searches = new Hashtable<String, String>();
-	int index = 0;
-	while (props.containsKey("search." + index + ".parameters")) {
-	    searches.put(props.getProperty("search." + index + ".parameters"),
-		    props.getProperty("search." + index + ".title",
-			    "<unspecified>"));
-
-	    index = index + 1;
+	if (interactive) {
+	    Thread interactiveThread = new Thread(this);
+	    interactiveThread.start();
 	}
 
 	while (!stopped) {
@@ -180,10 +182,10 @@ public class TradeMeScanner implements Runnable {
 
 		    index = index + 1;
 		}
-		
+
 		if (newItems > 0) {
 		    message.append("\n");
-		    
+
 		    itemsFound = true;
 		}
 
@@ -217,7 +219,27 @@ public class TradeMeScanner implements Runnable {
 	    }
 	}
 
-	System.out.println("Ended.");
+	System.out.println("Terminated.");
+    }
+
+    public void run() {
+	String input = "";
+	BufferedReader inReader = new BufferedReader(new InputStreamReader(
+		System.in));
+	while (input != null) {
+	    System.out.print("Enter [x] to exit:");
+	    try {
+		input = inReader.readLine();
+	    } catch (IOException e) {
+		throw new RuntimeException(e);
+	    }
+
+	    if ("x".equals(input)) {
+		System.exit(0);
+	    }
+
+	    System.out.println();
+	}
     }
 
     private String format(Node node) {
