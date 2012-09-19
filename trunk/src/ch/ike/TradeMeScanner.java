@@ -199,10 +199,15 @@ public class TradeMeScanner implements Runnable {
 	    }
 
 	    for (String itemId : expiredItems) {
-		Calendar lastSeen = DatatypeConverter.parseDateTime(seenItems
-			.get(itemId, null));
-		lastSeen.add(Calendar.DATE, 1);
-		if (lastSeen.before(now)) {
+		Calendar lastSeen = null;
+		try {
+			lastSeen = DatatypeConverter.parseDateTime(seenItems.get(itemId, null));
+			lastSeen.add(Calendar.DATE, 1);
+		} catch (IllegalArgumentException e) {
+			
+		}
+			
+		if ((lastSeen == null) || lastSeen.before(now)) {
 		    seenItems.remove(itemId);
 		}
 	    }
