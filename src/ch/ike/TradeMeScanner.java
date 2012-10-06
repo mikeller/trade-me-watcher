@@ -198,7 +198,7 @@ public class TradeMeScanner implements Runnable {
 					.sendGetRequest("https://api.trademe.co.nz/v1/Listings/"
 							+ resultHandler.getListingId(item) + ".xml");
 
-NodeList questions = resultHandler.getListingQuestions(response
+			NodeList questions = resultHandler.getListingQuestions(response
 					.getBody());
 
 			index = 0;
@@ -230,7 +230,7 @@ NodeList questions = resultHandler.getListingQuestions(response
 					+ " questions, " + newQuestions
 					+ " new questions for watchlist item \"" + itemTitle
 					+ "\".");
-			
+
 			itemIndex = itemIndex + 1;
 		}
 
