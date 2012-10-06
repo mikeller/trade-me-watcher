@@ -104,8 +104,7 @@ public class TradeMeConnector {
 
 	public void printAccessToken() {
 		try {
-			if (prefs.nodeExists(ACCESS_TOKEN + "/" + TOKEN)
-					&& prefs.nodeExists(ACCESS_TOKEN + "/" + SECRET)) {
+			if (prefs.nodeExists(ACCESS_TOKEN)) {
 				System.out.println("Access Token: "
 						+ prefs.node(ACCESS_TOKEN).get(TOKEN, null));
 				System.out.println("Access Secret: "
