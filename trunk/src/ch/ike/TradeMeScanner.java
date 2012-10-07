@@ -5,6 +5,7 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.io.Writer;
 import java.util.Arrays;
@@ -26,8 +27,10 @@ import nz.co.trademe.TradeMeConnector;
 
 import org.scribe.builder.ServiceBuilder;
 import org.scribe.model.Response;
+import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
+import org.xml.sax.SAXException;
 
 import com.sun.org.apache.xml.internal.serialize.OutputFormat;
 import com.sun.org.apache.xml.internal.serialize.XMLSerializer;
@@ -51,21 +54,25 @@ public class TradeMeScanner implements Runnable {
 
 		try {
 			if ((args.length > 0) && "deauthorise".equals(args[0])) {
-			self.connector.deauthoriseUser();
-		} else if ((args.length > 0) && "get_access_token".equals(args[0])) {
-			self.connector.printAccessToken();
-		} else if ((args.length > 0) && "clear_cache".equals(args[0])) {
-			self.clearCache();
-		} else {
-			boolean interactive = false;
-			if ((args.length > 0) && "interactive".equals(args[0])) {
-				interactive = true;
+				self.connector.deauthoriseUser();
+			} else if ((args.length > 0) && "get_access_token".equals(args[0])) {
+				self.connector.printAccessToken();
+			} else if ((args.length > 0) && "clear_cache".equals(args[0])) {
+				self.clearCache();
+			} else {
+				boolean interactive = false;
+				if ((args.length > 0) && "interactive".equals(args[0])) {
+					interactive = true;
+				}
+				self.runScanner(interactive);
 			}
-			self.runScanner(interactive);
-		}
 		} catch (RuntimeException e) {
-			self.emailProvider.sendEmail("TradeMeScanner: An exception occurred: \n\n" + e.getMessage() 
-					+ "\n Cause:\n\n" + e.getStackTrace());
+			StringWriter message = new StringWriter();
+			PrintWriter printer = new PrintWriter(message);
+			printer.print("TradeMeScanner: An exception occurred: \n\n"
+					+ e.getMessage() + "\n\n Cause:\n\n");
+			e.printStackTrace(printer);
+			self.emailProvider.sendEmail("TradeMeScanner error", message.getBuffer().toString());
 		}
 	}
 
@@ -157,7 +164,7 @@ public class TradeMeScanner implements Runnable {
 			sendMessage = searchNewQuestions(message) || sendMessage;
 
 			if (sendMessage) {
-				emailProvider.sendEmail(message.toString());
+				emailProvider.sendEmail("New TradeMe Listings Found", message.toString());
 
 				sendMessage = false;
 			}
@@ -189,84 +196,91 @@ public class TradeMeScanner implements Runnable {
 		Response response = connector
 				.sendGetRequest("https://api.trademe.co.nz/v1/MyTradeMe/Watchlist/All.xml");
 
-		NodeList watchlistItems = resultHandler.getWatchlistItem(response
-				.getBody());
-
-		StringBuffer itemMessage = new StringBuffer();
-		int itemIndex = 0;
-		while (itemIndex < watchlistItems.getLength()) {
-			Node item = watchlistItems.item(itemIndex);
-			String itemTitle = resultHandler.getTitle(item);
-
-			itemMessage.append("New questions for \"" + itemTitle + "\":\n\n");
-
-			response = connector
-					.sendGetRequest("https://api.trademe.co.nz/v1/Listings/"
-							+ resultHandler.getListingId(item) + ".xml");
-
-			NodeList questions = resultHandler.getListingQuestions(response
+		if (!checkError(response)) {
+			NodeList watchlistItems = resultHandler.getWatchlistItem(response
 					.getBody());
 
-			index = 0;
-			int newQuestions = 0;
-			while (index < questions.getLength()) {
-				Node question = questions.item(index);
-				String questionId = resultHandler.getQuestionId(question);
+			StringBuffer itemMessage = new StringBuffer();
+			int itemIndex = 0;
+			while (itemIndex < watchlistItems.getLength()) {
+				Node item = watchlistItems.item(itemIndex);
+				String itemTitle = resultHandler.getTitle(item);
 
-				expiredQuestions.remove(questionId);
-				seenQuestions.put(questionId,
-						DatatypeConverter.printDateTime(now));
-				if (!allQuestions.contains(questionId)) {
-					allQuestions.add(questionId);
-					itemMessage.append(format(question) + "\n");
+				itemMessage.append("New questions for \"" + itemTitle
+						+ "\":\n\n");
 
-					newQuestions = newQuestions + 1;
+				response = connector
+						.sendGetRequest("https://api.trademe.co.nz/v1/Listings/"
+								+ resultHandler.getListingId(item) + ".xml");
+
+				if (!checkError(response)) {
+					NodeList questions = resultHandler
+							.getListingQuestions(response.getBody());
+
+					index = 0;
+					int newQuestions = 0;
+					while (index < questions.getLength()) {
+						Node question = questions.item(index);
+						String questionId = resultHandler
+								.getQuestionId(question);
+
+						expiredQuestions.remove(questionId);
+						seenQuestions.put(questionId,
+								DatatypeConverter.printDateTime(now));
+						if (!allQuestions.contains(questionId)) {
+							allQuestions.add(questionId);
+							itemMessage.append(format(question) + "\n");
+
+							newQuestions = newQuestions + 1;
+						}
+
+						index = index + 1;
+					}
+
+					if (newQuestions > 0) {
+						message.append(itemMessage);
+						message.append("\n");
+
+						questionsFound = true;
+					}
+
+					itemMessage.setLength(0);
+
+					System.out.println("Found " + questions.getLength()
+							+ " questions, " + newQuestions
+							+ " new questions for watchlist item \""
+							+ itemTitle + "\".");
 				}
 
-				index = index + 1;
+				itemIndex = itemIndex + 1;
 			}
 
-			if (newQuestions > 0) {
-				message.append(itemMessage);
-				message.append("\n");
+			for (String questionId : expiredQuestions) {
+				Calendar lastSeen = null;
+				try {
+					lastSeen = DatatypeConverter.parseDateTime(seenQuestions
+							.get(questionId, null));
+					lastSeen.add(Calendar.DATE, 1);
+				} catch (IllegalArgumentException e) {
 
-				questionsFound = true;
+				}
+
+				if ((lastSeen == null) || lastSeen.before(now)) {
+					seenQuestions.remove(questionId);
+				}
 			}
-			
-			itemMessage.setLength(0);
 
-			System.out.println("Found " + questions.getLength()
-					+ " questions, " + newQuestions
-					+ " new questions for watchlist item \"" + itemTitle
-					+ "\".");
-
-			itemIndex = itemIndex + 1;
-		}
-
-		for (String questionId : expiredQuestions) {
-			Calendar lastSeen = null;
 			try {
-				lastSeen = DatatypeConverter.parseDateTime(seenQuestions.get(
-						questionId, null));
-				lastSeen.add(Calendar.DATE, 1);
-			} catch (IllegalArgumentException e) {
-
+				seenQuestions.flush();
+			} catch (BackingStoreException e) {
+				throw new RuntimeException(e);
 			}
-
-			if ((lastSeen == null) || lastSeen.before(now)) {
-				seenQuestions.remove(questionId);
-			}
-		}
-
-		try {
-			seenQuestions.flush();
-		} catch (BackingStoreException e) {
-			throw new RuntimeException(e);
 		}
 		return questionsFound;
 	}
 
-	private boolean searchNewListings(Map<String, String> searches, StringBuffer message) {
+	private boolean searchNewListings(Map<String, String> searches,
+			StringBuffer message) {
 		Set<String> allItems;
 		try {
 			allItems = new HashSet<String>(Arrays.asList(seenItems.keys()));
@@ -279,48 +293,51 @@ public class TradeMeScanner implements Runnable {
 		Calendar now = GregorianCalendar.getInstance();
 		boolean itemsFound = false;
 		StringBuffer searchMessage = new StringBuffer();
-		
+
 		for (String parameters : searches.keySet()) {
 			Response response = connector
 					.sendGetRequest("https://api.trademe.co.nz/v1/Search/General.xml?"
 							+ parameters);
 
-			NodeList items = resultHandler
-					.getSearchListings(response.getBody());
+			if (!checkError(response)) {
+				NodeList items = resultHandler.getSearchListings(response
+						.getBody());
 
-			searchMessage.append("New items for \"" + searches.get(parameters)
-					+ "\":\n\n");
+				searchMessage.append("New items for \""
+						+ searches.get(parameters) + "\":\n\n");
 
-			index = 0;
-			int newItems = 0;
-			while (index < items.getLength()) {
-				Node item = items.item(index);
-				String listingId = resultHandler.getListingId(item);
+				index = 0;
+				int newItems = 0;
+				while (index < items.getLength()) {
+					Node item = items.item(index);
+					String listingId = resultHandler.getListingId(item);
 
-				expiredItems.remove(listingId);
-				seenItems.put(listingId, DatatypeConverter.printDateTime(now));
-				if (!allItems.contains(listingId)) {
-					allItems.add(listingId);
-					searchMessage.append(format(item) + "\n");
+					expiredItems.remove(listingId);
+					seenItems.put(listingId,
+							DatatypeConverter.printDateTime(now));
+					if (!allItems.contains(listingId)) {
+						allItems.add(listingId);
+						searchMessage.append(format(item) + "\n");
 
-					newItems = newItems + 1;
+						newItems = newItems + 1;
+					}
+
+					index = index + 1;
 				}
 
-				index = index + 1;
+				if (newItems > 0) {
+					message.append(searchMessage);
+					message.append("\n");
+
+					itemsFound = true;
+				}
+
+				searchMessage.setLength(0);
+
+				System.out.println("Found " + items.getLength() + " items, "
+						+ newItems + " new items for search \""
+						+ searches.get(parameters) + "\".");
 			}
-
-			if (newItems > 0) {
-				message.append(searchMessage);
-				message.append("\n");
-
-				itemsFound = true;
-			}
-			
-			searchMessage.setLength(0);
-
-			System.out.println("Found " + items.getLength() + " items, "
-					+ newItems + " new items for search \""
-					+ searches.get(parameters) + "\".");
 		}
 
 		for (String itemId : expiredItems) {
@@ -346,6 +363,30 @@ public class TradeMeScanner implements Runnable {
 		return itemsFound;
 	}
 
+	private boolean checkError(Response response) {
+		if (!response.isSuccessful()) {
+			String message;
+			try {
+				Node error = resultHandler.getBody(response.getBody());
+				message = "TradeMeScanner: An API call returned an error\n\n"
+						+ format(error);
+			} catch (SAXException e) {
+				message = "TradeMeScanner: An API call returned an error\n\n"
+						+ response.getBody();
+			} catch (IOException e) {
+				message = "TradeMeScanner: An API call returned an error\n\n"
+						+ response.getBody();
+			}
+			emailProvider.sendEmail("TradeMeScanner: API call error", message);
+
+			System.out.println("API call error: " + response.getBody());
+
+			return true;
+		} else {
+			return false;
+		}
+	}
+
 	public void run() {
 		String input = "";
 		BufferedReader inReader = new BufferedReader(new InputStreamReader(
@@ -368,7 +409,12 @@ public class TradeMeScanner implements Runnable {
 
 	private String format(Node node) {
 		try {
-			OutputFormat format = new OutputFormat(node.getOwnerDocument());
+			OutputFormat format;
+			if (node instanceof Document) {
+				format = new OutputFormat((Document) node);
+			} else {
+				format = new OutputFormat(node.getOwnerDocument());
+			}
 			format.setLineWidth(65);
 			format.setIndenting(true);
 			format.setIndent(2);

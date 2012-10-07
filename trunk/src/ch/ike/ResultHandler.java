@@ -122,4 +122,9 @@ public class ResultHandler {
 			throw new RuntimeException(e);
 		}
 	}
+
+	public Node getBody(String response) throws SAXException, IOException {
+		InputSource is = new InputSource(new StringReader(response));
+		return docBuilder.parse(is);
+	}
 }
