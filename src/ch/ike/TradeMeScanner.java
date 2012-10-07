@@ -154,9 +154,9 @@ public class TradeMeScanner implements Runnable {
 			if (sendMessage) {
 				emailProvider.sendEmail(message.toString());
 
-				message.setLength(0);
 				sendMessage = false;
 			}
+			message.setLength(0);
 
 			try {
 				Thread.sleep(1000 * interval);
