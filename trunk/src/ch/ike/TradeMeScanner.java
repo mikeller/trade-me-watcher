@@ -49,7 +49,8 @@ public class TradeMeScanner implements Runnable {
 	public static void main(String[] args) {
 		TradeMeScanner self = new TradeMeScanner();
 
-		if ((args.length > 0) && "deauthorise".equals(args[0])) {
+		try {
+			if ((args.length > 0) && "deauthorise".equals(args[0])) {
 			self.connector.deauthoriseUser();
 		} else if ((args.length > 0) && "get_access_token".equals(args[0])) {
 			self.connector.printAccessToken();
@@ -61,6 +62,10 @@ public class TradeMeScanner implements Runnable {
 				interactive = true;
 			}
 			self.runScanner(interactive);
+		}
+		} catch (RuntimeException e) {
+			self.emailProvider.sendEmail("TradeMeScanner: An exception occurred: \n\n" + e.getMessage() 
+					+ "\n Cause:\n\n" + e.getStackTrace());
 		}
 	}
 
@@ -187,12 +192,13 @@ public class TradeMeScanner implements Runnable {
 		NodeList watchlistItems = resultHandler.getWatchlistItem(response
 				.getBody());
 
+		StringBuffer itemMessage = new StringBuffer();
 		int itemIndex = 0;
 		while (itemIndex < watchlistItems.getLength()) {
 			Node item = watchlistItems.item(itemIndex);
 			String itemTitle = resultHandler.getTitle(item);
 
-			message.append("New questions for \"" + itemTitle + "\":\n\n");
+			itemMessage.append("New questions for \"" + itemTitle + "\":\n\n");
 
 			response = connector
 					.sendGetRequest("https://api.trademe.co.nz/v1/Listings/"
@@ -212,7 +218,7 @@ public class TradeMeScanner implements Runnable {
 						DatatypeConverter.printDateTime(now));
 				if (!allQuestions.contains(questionId)) {
 					allQuestions.add(questionId);
-					message.append(format(question) + "\n");
+					itemMessage.append(format(question) + "\n");
 
 					newQuestions = newQuestions + 1;
 				}
@@ -221,10 +227,13 @@ public class TradeMeScanner implements Runnable {
 			}
 
 			if (newQuestions > 0) {
+				message.append(itemMessage);
 				message.append("\n");
 
 				questionsFound = true;
 			}
+			
+			itemMessage.setLength(0);
 
 			System.out.println("Found " + questions.getLength()
 					+ " questions, " + newQuestions
@@ -257,8 +266,7 @@ public class TradeMeScanner implements Runnable {
 		return questionsFound;
 	}
 
-	private boolean searchNewListings(Map<String, String> searches,
-			StringBuffer message) {
+	private boolean searchNewListings(Map<String, String> searches, StringBuffer message) {
 		Set<String> allItems;
 		try {
 			allItems = new HashSet<String>(Arrays.asList(seenItems.keys()));
@@ -270,7 +278,8 @@ public class TradeMeScanner implements Runnable {
 		Set<String> expiredItems = new HashSet<String>(allItems);
 		Calendar now = GregorianCalendar.getInstance();
 		boolean itemsFound = false;
-
+		StringBuffer searchMessage = new StringBuffer();
+		
 		for (String parameters : searches.keySet()) {
 			Response response = connector
 					.sendGetRequest("https://api.trademe.co.nz/v1/Search/General.xml?"
@@ -279,7 +288,7 @@ public class TradeMeScanner implements Runnable {
 			NodeList items = resultHandler
 					.getSearchListings(response.getBody());
 
-			message.append("New items for \"" + searches.get(parameters)
+			searchMessage.append("New items for \"" + searches.get(parameters)
 					+ "\":\n\n");
 
 			index = 0;
@@ -292,7 +301,7 @@ public class TradeMeScanner implements Runnable {
 				seenItems.put(listingId, DatatypeConverter.printDateTime(now));
 				if (!allItems.contains(listingId)) {
 					allItems.add(listingId);
-					message.append(format(item) + "\n");
+					searchMessage.append(format(item) + "\n");
 
 					newItems = newItems + 1;
 				}
@@ -301,10 +310,13 @@ public class TradeMeScanner implements Runnable {
 			}
 
 			if (newItems > 0) {
+				message.append(searchMessage);
 				message.append("\n");
 
 				itemsFound = true;
 			}
+			
+			searchMessage.setLength(0);
 
 			System.out.println("Found " + items.getLength() + " items, "
 					+ newItems + " new items for search \""
