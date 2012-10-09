@@ -73,7 +73,8 @@ public class TradeMeScanner implements Runnable {
 			printer.print("TradeMeScanner: An exception occurred: \n\n"
 					+ e.getMessage() + "\n\n Cause:\n\n");
 			e.printStackTrace(printer);
-			self.emailProvider.sendEmail("TradeMeScanner error", message.getBuffer().toString());
+			self.emailProvider.sendEmail("TradeMeScanner error", message
+					.getBuffer().toString());
 		}
 	}
 
@@ -165,11 +166,13 @@ public class TradeMeScanner implements Runnable {
 		StringBuffer message = new StringBuffer();
 		while (!stopped) {
 			sendMessage = searchNewListings(searches, message);
-			sendMessage = searchNewListingsNoDate(searches, message) || sendMessage;
+			sendMessage = searchNewListingsNoDate(searches, message)
+					|| sendMessage;
 			sendMessage = searchNewQuestions(message) || sendMessage;
 
 			if (sendMessage) {
-				emailProvider.sendEmail("New TradeMe Listings Found", message.toString());
+				emailProvider.sendEmail("New TradeMe Listings Found",
+						message.toString());
 
 				sendMessage = false;
 			}
@@ -300,21 +303,22 @@ public class TradeMeScanner implements Runnable {
 		StringBuffer searchMessage = new StringBuffer();
 
 		for (String parameters : searches.keySet()) {
-			String latestDateString = latestStartDates.get(searches.get(parameters), null);
+			String latestDateString = latestStartDates.get(
+					searches.get(parameters), null);
 			Calendar latestDate = null;
 			if (latestDateString != null) {
 				latestDate = DatatypeConverter.parseDateTime(latestDateString);
 			}
-			
+
 			String request = "https://api.trademe.co.nz/v1/Search/General.xml?"
 					+ parameters;
-			
+
 			if (latestDate != null) {
-				request = request + "&date_from=" + DatatypeConverter.printDateTime(latestDate);
+				request = request + "&date_from="
+						+ DatatypeConverter.printDateTime(latestDate);
 			}
-					
-			Response response = connector
-					.sendGetRequest(request);
+
+			Response response = connector.sendGetRequest(request);
 
 			if (!checkError(response)) {
 				NodeList items = resultHandler.getSearchListings(response
@@ -345,8 +349,11 @@ public class TradeMeScanner implements Runnable {
 
 					index = index + 1;
 				}
-				
-				latestStartDates.put(searches.get(parameters), DatatypeConverter.printDateTime(latestDate));
+
+				if (latestDate != null) {
+					latestStartDates.put(searches.get(parameters),
+							DatatypeConverter.printDateTime(latestDate));
+				}
 				try {
 					latestStartDates.flush();
 				} catch (BackingStoreException e) {
@@ -362,9 +369,10 @@ public class TradeMeScanner implements Runnable {
 
 				searchMessage.setLength(0);
 
-				System.out.println("Found " + items.getLength() + " items (not restricted by start date), "
-						+ newItems + " new items for search \""
-						+ searches.get(parameters) + "\".");
+				System.out.println("Found " + items.getLength()
+						+ " items, " + newItems
+						+ " new items for search \"" + searches.get(parameters)
+						+ "\".");
 			}
 		}
 
@@ -415,8 +423,9 @@ public class TradeMeScanner implements Runnable {
 				NodeList items = resultHandler.getSearchListings(response
 						.getBody());
 
-				searchMessage.append("New items (found without start date) for \""
-						+ searches.get(parameters) + "\":\n\n");
+				searchMessage
+						.append("New items (found without start date) for \""
+								+ searches.get(parameters) + "\":\n\n");
 
 				index = 0;
 				int newItems = 0;
@@ -436,7 +445,7 @@ public class TradeMeScanner implements Runnable {
 
 					index = index + 1;
 				}
-				
+
 				if (newItems > 0) {
 					message.append(searchMessage);
 					message.append("\n");
@@ -446,7 +455,7 @@ public class TradeMeScanner implements Runnable {
 
 				searchMessage.setLength(0);
 
-				System.out.println("Found " + items.getLength() + " items, "
+				System.out.println("Found " + items.getLength() + " items (not restricted by start date), "
 						+ newItems + " new items for search \""
 						+ searches.get(parameters) + "\".");
 			}
