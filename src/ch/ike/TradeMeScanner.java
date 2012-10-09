@@ -40,6 +40,7 @@ public class TradeMeScanner implements Runnable {
 	private final Properties props;
 	private final Preferences prefs;
 	private final Preferences seenItems;
+	private final Preferences latestStartDates;
 	private final Preferences seenQuestions;
 
 	private ResultHandler resultHandler;
@@ -79,6 +80,7 @@ public class TradeMeScanner implements Runnable {
 	private void clearCache() {
 		try {
 			seenItems.removeNode();
+			latestStartDates.removeNode();
 			seenQuestions.removeNode();
 			prefs.flush();
 		} catch (BackingStoreException e) {
@@ -107,6 +109,8 @@ public class TradeMeScanner implements Runnable {
 		connector = new TradeMeConnector(props, prefs);
 
 		seenItems = prefs.node("seen_items");
+
+		latestStartDates = prefs.node("latest_start_dates");
 
 		seenQuestions = prefs.node("seen_questions");
 
@@ -161,6 +165,7 @@ public class TradeMeScanner implements Runnable {
 		StringBuffer message = new StringBuffer();
 		while (!stopped) {
 			sendMessage = searchNewListings(searches, message);
+			sendMessage = searchNewListingsNoDate(searches, message) || sendMessage;
 			sendMessage = searchNewQuestions(message) || sendMessage;
 
 			if (sendMessage) {
@@ -295,6 +300,113 @@ public class TradeMeScanner implements Runnable {
 		StringBuffer searchMessage = new StringBuffer();
 
 		for (String parameters : searches.keySet()) {
+			String latestDateString = latestStartDates.get(searches.get(parameters), null);
+			Calendar latestDate = null;
+			if (latestDateString != null) {
+				latestDate = DatatypeConverter.parseDateTime(latestDateString);
+			}
+			
+			String request = "https://api.trademe.co.nz/v1/Search/General.xml?"
+					+ parameters;
+			
+			if (latestDate != null) {
+				request = request + "&date_from=" + DatatypeConverter.printDateTime(latestDate);
+			}
+					
+			Response response = connector
+					.sendGetRequest(request);
+
+			if (!checkError(response)) {
+				NodeList items = resultHandler.getSearchListings(response
+						.getBody());
+
+				searchMessage.append("New items for \""
+						+ searches.get(parameters) + "\":\n\n");
+
+				index = 0;
+				int newItems = 0;
+				while (index < items.getLength()) {
+					Node item = items.item(index);
+					String listingId = resultHandler.getListingId(item);
+					Calendar startDate = resultHandler.getStartDate(item);
+					if ((latestDate == null) || latestDate.before(startDate)) {
+						latestDate = startDate;
+					}
+
+					expiredItems.remove(listingId);
+					seenItems.put(listingId,
+							DatatypeConverter.printDateTime(now));
+					if (!allItems.contains(listingId)) {
+						allItems.add(listingId);
+						searchMessage.append(format(item) + "\n");
+
+						newItems = newItems + 1;
+					}
+
+					index = index + 1;
+				}
+				
+				latestStartDates.put(searches.get(parameters), DatatypeConverter.printDateTime(latestDate));
+				try {
+					latestStartDates.flush();
+				} catch (BackingStoreException e) {
+					throw new RuntimeException(e);
+				}
+
+				if (newItems > 0) {
+					message.append(searchMessage);
+					message.append("\n");
+
+					itemsFound = true;
+				}
+
+				searchMessage.setLength(0);
+
+				System.out.println("Found " + items.getLength() + " items (not restricted by start date), "
+						+ newItems + " new items for search \""
+						+ searches.get(parameters) + "\".");
+			}
+		}
+
+		for (String itemId : expiredItems) {
+			Calendar lastSeen = null;
+			try {
+				lastSeen = DatatypeConverter.parseDateTime(seenItems.get(
+						itemId, null));
+				lastSeen.add(Calendar.DATE, 1);
+			} catch (IllegalArgumentException e) {
+
+			}
+
+			if ((lastSeen == null) || lastSeen.before(now)) {
+				seenItems.remove(itemId);
+			}
+		}
+
+		try {
+			seenItems.flush();
+		} catch (BackingStoreException e) {
+			throw new RuntimeException(e);
+		}
+		return itemsFound;
+	}
+
+	private boolean searchNewListingsNoDate(Map<String, String> searches,
+			StringBuffer message) {
+		Set<String> allItems;
+		try {
+			allItems = new HashSet<String>(Arrays.asList(seenItems.keys()));
+		} catch (BackingStoreException e) {
+			throw new RuntimeException(e);
+		}
+
+		int index;
+		Set<String> expiredItems = new HashSet<String>(allItems);
+		Calendar now = GregorianCalendar.getInstance();
+		boolean itemsFound = false;
+		StringBuffer searchMessage = new StringBuffer();
+
+		for (String parameters : searches.keySet()) {
 			Response response = connector
 					.sendGetRequest("https://api.trademe.co.nz/v1/Search/General.xml?"
 							+ parameters);
@@ -303,7 +415,7 @@ public class TradeMeScanner implements Runnable {
 				NodeList items = resultHandler.getSearchListings(response
 						.getBody());
 
-				searchMessage.append("New items for \""
+				searchMessage.append("New items (found without start date) for \""
 						+ searches.get(parameters) + "\":\n\n");
 
 				index = 0;
@@ -324,7 +436,7 @@ public class TradeMeScanner implements Runnable {
 
 					index = index + 1;
 				}
-
+				
 				if (newItems > 0) {
 					message.append(searchMessage);
 					message.append("\n");
