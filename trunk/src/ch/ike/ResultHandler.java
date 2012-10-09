@@ -2,7 +2,9 @@ package ch.ike;
 
 import java.io.IOException;
 import java.io.StringReader;
+import java.util.Calendar;
 
+import javax.xml.bind.DatatypeConverter;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
@@ -22,13 +24,14 @@ public class ResultHandler {
 			.newInstance();
 	private static final XPathFactory xPathFactory = XPathFactory.newInstance();
 
-	public final DocumentBuilder docBuilder;
-	public final XPathExpression searchListingExpr;
-	public final XPathExpression watchlistItemExpr;
-	public final XPathExpression listingQuestionsExpr;
-	public final XPathExpression listingIdExpr;
-	public final XPathExpression titleExpr;
-	public final XPathExpression questionIdExpr;
+	private final DocumentBuilder docBuilder;
+	private final XPathExpression searchListingExpr;
+	private final XPathExpression watchlistItemExpr;
+	private final XPathExpression listingQuestionsExpr;
+	private final XPathExpression listingIdExpr;
+	private final XPathExpression titleExpr;
+	private final XPathExpression questionIdExpr;
+	private final XPathExpression startDateExpr;
 
 	public ResultHandler() {
 		try {
@@ -45,6 +48,7 @@ public class ResultHandler {
 			listingQuestionsExpr = xPathFactory.newXPath().compile(
 					"/ListedItemDetail/Questions/List/Question");
 			listingIdExpr = xPathFactory.newXPath().compile("./ListingId");
+			startDateExpr = xPathFactory.newXPath().compile("./StartDate");
 			titleExpr = xPathFactory.newXPath().compile("./Title");
 			questionIdExpr = xPathFactory.newXPath().compile(
 					"./ListingQuestionId");
@@ -71,6 +75,14 @@ public class ResultHandler {
 	String getListingId(Node item) {
 		try {
 			return (String) listingIdExpr.evaluate(item, XPathConstants.STRING);
+		} catch (XPathExpressionException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+	Calendar getStartDate(Node item) {
+		try {
+			return DatatypeConverter.parseDateTime((String) startDateExpr.evaluate(item, XPathConstants.STRING));
 		} catch (XPathExpressionException e) {
 			throw new RuntimeException(e);
 		}
