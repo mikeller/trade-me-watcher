@@ -14,6 +14,7 @@ import java.util.GregorianCalendar;
 import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.InvalidPropertiesFormatException;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -51,18 +52,24 @@ public class TradeMeScanner implements Runnable {
 	private volatile boolean stopped;
 
 	public static void main(String[] args) {
-		TradeMeScanner self = new TradeMeScanner();
+		List<String> argList = Arrays.asList(args);
+		
+		String configFile = "TradeMeScanner.xml";
+		if (argList.contains("-c")) {
+			configFile = argList.get(argList.indexOf("-c") + 1);
+		}
+		TradeMeScanner self = new TradeMeScanner(configFile);
 
 		try {
-			if ((args.length > 0) && "deauthorise".equals(args[0])) {
+			if (argList.contains("deauthorise")) {
 				self.connector.deauthoriseUser();
-			} else if ((args.length > 0) && "get_access_token".equals(args[0])) {
+			} else if (argList.contains("get_access_token")) {
 				self.connector.printAccessToken();
-			} else if ((args.length > 0) && "clear_cache".equals(args[0])) {
+			} else if (argList.contains("clear_cache")) {
 				self.clearCache();
 			} else {
 				boolean interactive = false;
-				if ((args.length > 0) && "interactive".equals(args[0])) {
+				if (argList.contains("interactive")) {
 					interactive = true;
 				}
 				self.runScanner(interactive);
@@ -89,10 +96,10 @@ public class TradeMeScanner implements Runnable {
 		}
 	}
 
-	public TradeMeScanner() {
+	public TradeMeScanner(String configFile) {
 		props = new Properties();
 		try {
-			FileInputStream in = new FileInputStream("TradeMeScanner.xml");
+			FileInputStream in = new FileInputStream(configFile);
 			props.loadFromXML(in);
 			in.close();
 		} catch (FileNotFoundException e) {
