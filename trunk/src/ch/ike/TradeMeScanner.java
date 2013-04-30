@@ -8,6 +8,7 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.io.Writer;
+import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.GregorianCalendar;
@@ -53,7 +54,7 @@ public class TradeMeScanner implements Runnable {
 
 	public static void main(String[] args) {
 		List<String> argList = Arrays.asList(args);
-		
+
 		String configFile = "TradeMeScanner.xml";
 		if (argList.contains("-c")) {
 			configFile = argList.get(argList.indexOf("-c") + 1);
@@ -172,6 +173,9 @@ public class TradeMeScanner implements Runnable {
 		boolean sendMessage = false;
 		StringBuffer message = new StringBuffer();
 		while (!stopped) {
+			System.out.println("Starting scanner run at "
+					+ SimpleDateFormat.getDateTimeInstance().format(
+							GregorianCalendar.getInstance().getTime()));
 			sendMessage = searchNewListings(searches, message);
 			sendMessage = searchNewListingsNoDate(searches, message)
 					|| sendMessage;
@@ -376,10 +380,9 @@ public class TradeMeScanner implements Runnable {
 
 				searchMessage.setLength(0);
 
-				System.out.println("Found " + items.getLength()
-						+ " items, " + newItems
-						+ " new items for search \"" + searches.get(parameters)
-						+ "\".");
+				System.out.println("Found " + items.getLength() + " items, "
+						+ newItems + " new items for search \""
+						+ searches.get(parameters) + "\".");
 			}
 		}
 
@@ -462,9 +465,10 @@ public class TradeMeScanner implements Runnable {
 
 				searchMessage.setLength(0);
 
-				System.out.println("Found " + items.getLength() + " items (not restricted by start date), "
-						+ newItems + " new items for search \""
-						+ searches.get(parameters) + "\".");
+				System.out.println("Found " + items.getLength()
+						+ " items (not restricted by start date), " + newItems
+						+ " new items for search \"" + searches.get(parameters)
+						+ "\".");
 			}
 		}
 
