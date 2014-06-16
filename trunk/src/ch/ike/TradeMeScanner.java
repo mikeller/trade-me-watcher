@@ -37,6 +37,7 @@ import org.xml.sax.SAXException;
 import com.sun.org.apache.xml.internal.serialize.OutputFormat;
 import com.sun.org.apache.xml.internal.serialize.XMLSerializer;
 
+@SuppressWarnings("restriction")
 public class TradeMeScanner implements Runnable {
 
 	private final Properties props;
