@@ -10,6 +10,13 @@
 		<sourceDirectory>src</sourceDirectory>
 		<plugins>
 			<plugin>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<configuration>
+					<source>1.7</source>
+					<target>1.7</target>
+				</configuration>
+			</plugin>
+			<plugin>
 				<artifactId>maven-assembly-plugin</artifactId>
 				<configuration>
 					<archive>
@@ -52,12 +59,8 @@
 			<artifactId>commons-codec</artifactId>
 			<version>1.9</version>
 		</dependency>
-<!--		<dependency>
-			<groupId>org.apache.geronimo.javamail</groupId>
-			<artifactId>geronimo-javamail_1.4_provider</artifactId>
-			<version>1.8.3</version>
-		</dependency>
--->
+		<!-- <dependency> <groupId>org.apache.geronimo.javamail</groupId> <artifactId>geronimo-javamail_1.4_provider</artifactId> 
+			<version>1.8.3</version> </dependency> -->
 		<dependency>
 			<groupId>javax.mail</groupId>
 			<artifactId>mail</artifactId>
