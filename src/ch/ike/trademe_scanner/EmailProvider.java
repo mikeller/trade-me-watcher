@@ -1,4 +1,4 @@
-package ch.ike;
+package ch.ike.trademe_scanner;
 
 import java.util.Properties;
 

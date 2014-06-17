@@ -1,4 +1,4 @@
-package ch.ike;
+package ch.ike.trademe_scanner;
 
 import java.io.IOException;
 import java.io.StringReader;
@@ -14,6 +14,7 @@ import javax.xml.xpath.XPathExpressionException;
 import javax.xml.xpath.XPathFactory;
 
 import org.w3c.dom.Document;
+import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
@@ -82,7 +83,8 @@ public class ResultHandler {
 
 	Calendar getStartDate(Node item) {
 		try {
-			return DatatypeConverter.parseDateTime((String) startDateExpr.evaluate(item, XPathConstants.STRING));
+			return DatatypeConverter.parseDateTime((String) startDateExpr
+					.evaluate(item, XPathConstants.STRING));
 		} catch (XPathExpressionException e) {
 			throw new RuntimeException(e);
 		}
@@ -138,5 +140,60 @@ public class ResultHandler {
 	public Node getBody(String response) throws SAXException, IOException {
 		InputSource is = new InputSource(new StringReader(response));
 		return docBuilder.parse(is);
+	}
+
+	Document newDocument() {
+		return docBuilder.newDocument();
+	}
+
+	private Element getOrCreateElement(Element parent, String name) {
+		Element result;
+		NodeList resultList = parent.getElementsByTagName(name);
+		if (resultList.getLength() > 0) {
+			result = (Element) resultList.item(0);
+		} else {
+			result = parent.getOwnerDocument().createElement(name);
+			parent.appendChild(result);
+		}
+		return result;
+	}
+
+	private void importNode(Element parent, Node node) {
+		Node result = parent.getOwnerDocument().importNode(node, true);
+		parent.appendChild(result);
+	}
+
+	public Element addQuestion(Element item, Element parent, String title,
+			Node question) {
+		if (item == null) {
+			Element questions = getOrCreateElement(parent, "Questions");
+
+			item = parent.getOwnerDocument().createElement("Item");
+
+			item.setAttribute("ItemTitle", title);
+
+			questions.appendChild(item);
+		}
+
+		importNode(item, question);
+
+		return item;
+	}
+
+	public Element addItem(Element search, Element parent,
+			String searchParameters, Node item) {
+		if (search == null) {
+			Element searches = getOrCreateElement(parent, "Searches");
+
+			search = parent.getOwnerDocument().createElement("Search");
+
+			search.setAttribute("Parameters", searchParameters);
+
+			searches.appendChild(search);
+		}
+
+		importNode(search, item);
+
+		return search;
 	}
 }
