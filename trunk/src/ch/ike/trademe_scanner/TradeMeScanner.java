@@ -1,4 +1,4 @@
-package ch.ike;
+package ch.ike.trademe_scanner;
 
 import java.io.BufferedReader;
 import java.io.FileInputStream;
@@ -30,6 +30,7 @@ import nz.co.trademe.TradeMeConnector;
 import org.scribe.builder.ServiceBuilder;
 import org.scribe.model.Response;
 import org.w3c.dom.Document;
+import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
@@ -172,23 +173,24 @@ public class TradeMeScanner implements Runnable {
 		}
 
 		boolean sendMessage = false;
-		StringBuffer message = new StringBuffer();
 		while (!stopped) {
+			Element result = resultHandler.newDocument().createElement("ScanResults");
+			result.getOwnerDocument().appendChild(result);
+			
 			System.out.println("Starting scanner run at "
 					+ SimpleDateFormat.getDateTimeInstance().format(
 							GregorianCalendar.getInstance().getTime()));
-			sendMessage = searchNewListings(searches, message);
-			sendMessage = searchNewListingsNoDate(searches, message)
+			sendMessage = searchNewListings(searches, result);
+			sendMessage = searchNewListingsNoDate(searches, result)
 					|| sendMessage;
-			sendMessage = searchNewQuestions(message) || sendMessage;
+			sendMessage = searchNewQuestions(result) || sendMessage;
 
 			if (sendMessage) {
 				emailProvider.sendEmail("New TradeMe Listings Found",
-						message.toString());
+						format(result));
 
 				sendMessage = false;
 			}
-			message.setLength(0);
 
 			try {
 				Thread.sleep(1000 * interval);
@@ -199,7 +201,7 @@ public class TradeMeScanner implements Runnable {
 		System.out.println("Terminated.");
 	}
 
-	private boolean searchNewQuestions(StringBuffer message) {
+	private boolean searchNewQuestions(Element result) {
 		Set<String> allQuestions;
 		try {
 			allQuestions = new HashSet<String>(Arrays.asList(seenQuestions
@@ -220,14 +222,13 @@ public class TradeMeScanner implements Runnable {
 			NodeList watchlistItems = resultHandler.getWatchlistItem(response
 					.getBody());
 
-			StringBuffer itemMessage = new StringBuffer();
 			int itemIndex = 0;
+			Element resultItem;
 			while (itemIndex < watchlistItems.getLength()) {
 				Node item = watchlistItems.item(itemIndex);
 				String itemTitle = resultHandler.getTitle(item);
-
-				itemMessage.append("New questions for \"" + itemTitle
-						+ "\":\n\n");
+				
+				resultItem = null;
 
 				response = connector
 						.sendGetRequest("https://api.trademe.co.nz/v1/Listings/"
@@ -249,22 +250,15 @@ public class TradeMeScanner implements Runnable {
 								DatatypeConverter.printDateTime(now));
 						if (!allQuestions.contains(questionId)) {
 							allQuestions.add(questionId);
-							itemMessage.append(format(question) + "\n");
+							
+							resultItem = resultHandler.addQuestion(resultItem, result, resultHandler.getTitle(item), question);
 
 							newQuestions = newQuestions + 1;
+							questionsFound = true;
 						}
 
 						index = index + 1;
 					}
-
-					if (newQuestions > 0) {
-						message.append(itemMessage);
-						message.append("\n");
-
-						questionsFound = true;
-					}
-
-					itemMessage.setLength(0);
 
 					System.out.println("Found " + questions.getLength()
 							+ " questions, " + newQuestions
@@ -300,7 +294,7 @@ public class TradeMeScanner implements Runnable {
 	}
 
 	private boolean searchNewListings(Map<String, String> searches,
-			StringBuffer message) {
+			Element result) {
 		Set<String> allItems;
 		try {
 			allItems = new HashSet<String>(Arrays.asList(seenItems.keys()));
@@ -312,7 +306,7 @@ public class TradeMeScanner implements Runnable {
 		Set<String> expiredItems = new HashSet<String>(allItems);
 		Calendar now = GregorianCalendar.getInstance();
 		boolean itemsFound = false;
-		StringBuffer searchMessage = new StringBuffer();
+		Element searchResult;
 
 		for (String parameters : searches.keySet()) {
 			String latestDateString = latestStartDates.get(
@@ -335,9 +329,8 @@ public class TradeMeScanner implements Runnable {
 			if (!checkError(response)) {
 				NodeList items = resultHandler.getSearchListings(response
 						.getBody());
-
-				searchMessage.append("New items for \""
-						+ searches.get(parameters) + "\":\n\n");
+				
+				searchResult = null;
 
 				index = 0;
 				int newItems = 0;
@@ -354,9 +347,11 @@ public class TradeMeScanner implements Runnable {
 							DatatypeConverter.printDateTime(now));
 					if (!allItems.contains(listingId)) {
 						allItems.add(listingId);
-						searchMessage.append(format(item) + "\n");
+						
+						searchResult = resultHandler.addItem(searchResult, result, searches.get(parameters), item);
 
 						newItems = newItems + 1;
+						itemsFound = true;
 					}
 
 					index = index + 1;
@@ -371,15 +366,6 @@ public class TradeMeScanner implements Runnable {
 				} catch (BackingStoreException e) {
 					throw new RuntimeException(e);
 				}
-
-				if (newItems > 0) {
-					message.append(searchMessage);
-					message.append("\n");
-
-					itemsFound = true;
-				}
-
-				searchMessage.setLength(0);
 
 				System.out.println("Found " + items.getLength() + " items, "
 						+ newItems + " new items for search \""
@@ -411,7 +397,7 @@ public class TradeMeScanner implements Runnable {
 	}
 
 	private boolean searchNewListingsNoDate(Map<String, String> searches,
-			StringBuffer message) {
+			Element result) {
 		Set<String> allItems;
 		try {
 			allItems = new HashSet<String>(Arrays.asList(seenItems.keys()));
@@ -423,7 +409,7 @@ public class TradeMeScanner implements Runnable {
 		Set<String> expiredItems = new HashSet<String>(allItems);
 		Calendar now = GregorianCalendar.getInstance();
 		boolean itemsFound = false;
-		StringBuffer searchMessage = new StringBuffer();
+		Element searchResult;
 
 		for (String parameters : searches.keySet()) {
 			Response response = connector
@@ -434,9 +420,7 @@ public class TradeMeScanner implements Runnable {
 				NodeList items = resultHandler.getSearchListings(response
 						.getBody());
 
-				searchMessage
-						.append("New items (found without start date) for \""
-								+ searches.get(parameters) + "\":\n\n");
+				searchResult = null;
 
 				index = 0;
 				int newItems = 0;
@@ -449,22 +433,14 @@ public class TradeMeScanner implements Runnable {
 							DatatypeConverter.printDateTime(now));
 					if (!allItems.contains(listingId)) {
 						allItems.add(listingId);
-						searchMessage.append(format(item) + "\n");
+						searchResult = resultHandler.addItem(searchResult, result, searches.get(parameters), item);
 
 						newItems = newItems + 1;
+						itemsFound = true;
 					}
 
 					index = index + 1;
 				}
-
-				if (newItems > 0) {
-					message.append(searchMessage);
-					message.append("\n");
-
-					itemsFound = true;
-				}
-
-				searchMessage.setLength(0);
 
 				System.out.println("Found " + items.getLength()
 						+ " items (not restricted by start date), " + newItems
