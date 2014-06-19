@@ -174,8 +174,7 @@ public class TradeMeScanner implements Runnable {
 
 		boolean sendMessage = false;
 		while (!stopped) {
-			Element result = resultHandler.newDocument().createElement("ScanResults");
-			result.getOwnerDocument().appendChild(result);
+			Element result = resultHandler.createScanResultsDocument();
 			
 			System.out.println("Starting scanner run at "
 					+ SimpleDateFormat.getDateTimeInstance().format(
