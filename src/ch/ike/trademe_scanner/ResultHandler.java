@@ -143,12 +143,12 @@ public class ResultHandler {
 
 			xPath = xPathFactory.newXPath();
 			xPath.setNamespaceContext(ns);
-			questionCountExpr = xPath
+			itemCountExpr = xPath
 					.compile("/ScanResults/Searches/Search/tm:Listing");
 
 			xPath = xPathFactory.newXPath();
 			xPath.setNamespaceContext(ns);
-			itemCountExpr = xPath
+			questionCountExpr = xPath
 					.compile("/ScanResults/QuestionItems/Item/Questions/tm:Question");
 		} catch (XPathExpressionException e) {
 			throw new RuntimeException(e);
