@@ -1,9 +1,15 @@
 <?xml version="1.0" encoding="ISO-8859-1"?>
 
 <xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
-xmlns:tm="http://api.trademe.co.nz/v1" version="1.0">
+xmlns:tm="http://api.trademe.co.nz/v1" version="1.0"
+
+xmlns:java="http://xml.apache.org/xalan/java"
+    exclude-result-prefixes="java">
+
 	<xsl:output method="html" />
 
+  	<xsl:variable name="formatter" select="java:java.text.SimpleDateFormat.new()"/>
+  	
 	<xsl:template match="/ScanResults">
 		<html>
 			<body>
@@ -60,7 +66,9 @@ xmlns:tm="http://api.trademe.co.nz/v1" version="1.0">
 						<xsl:if test="./tm:IsReserveMet = 'true'">
 							<li>Reserve Met</li>
 						</xsl:if>
-						<li>End Date: <xsl:value-of select="./tm:EndDate"/></li>
+     					<xsl:variable name="calendar"  select="java:javax.xml.bind.DatatypeConverter.parseDateTime(./tm:EndDate)"/>
+    					<xsl:variable name="date"  select="java:getTime($calendar)"/>
+						<li>End Date: <xsl:value-of select="java:format($formatter, $date)" /></li>
 						<xsl:if test="./tm:BidCount">
 						<li>Number of Bids: <xsl:value-of select="./tm:BidCount" /></li>
 						</xsl:if>
