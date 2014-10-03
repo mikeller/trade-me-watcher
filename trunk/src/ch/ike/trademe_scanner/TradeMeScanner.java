@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -22,6 +23,7 @@ import java.util.prefs.BackingStoreException;
 import java.util.prefs.Preferences;
 
 import javax.xml.bind.DatatypeConverter;
+import javax.xml.transform.stream.StreamSource;
 
 import nz.co.trademe.TradeMeApi;
 import nz.co.trademe.TradeMeConnector;
@@ -34,6 +36,8 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
 public class TradeMeScanner implements Runnable {
+
+	private static final String TRADE_ME_SCANNER_XML = "TradeMeScanner.xml";
 
 	private final Properties props;
 	private final Preferences prefs;
@@ -51,7 +55,7 @@ public class TradeMeScanner implements Runnable {
 	public static void main(String[] args) {
 		List<String> argList = Arrays.asList(args);
 
-		String configFile = "TradeMeScanner.xml";
+		String configFile = TRADE_ME_SCANNER_XML;
 		if (argList.contains("-c")) {
 			configFile = argList.get(argList.indexOf("-c") + 1);
 		}
@@ -96,13 +100,23 @@ public class TradeMeScanner implements Runnable {
 	public TradeMeScanner(String configFile) {
 		props = new Properties();
 		try {
-			FileInputStream in = new FileInputStream(configFile);
-			props.loadFromXML(in);
-			in.close();
-		} catch (FileNotFoundException e) {
-			throw new RuntimeException(e);
-		} catch (InvalidPropertiesFormatException e) {
-			throw new RuntimeException(e);
+			InputStream in = null;
+			try {
+				try {
+					in = new FileInputStream(configFile);
+				} catch (FileNotFoundException e) {
+					in = new StreamSource(getClass().getResource(
+							"/" + TRADE_ME_SCANNER_XML).toString())
+							.getInputStream();
+				}
+				try {
+					props.loadFromXML(in);
+				} catch (InvalidPropertiesFormatException e) {
+					throw new RuntimeException(e);
+				}
+			} finally {
+				in.close();
+			}
 		} catch (IOException e) {
 			throw new RuntimeException(e);
 		}
@@ -179,12 +193,14 @@ public class TradeMeScanner implements Runnable {
 			if (result != null) {
 				String title = "";
 
-				int count = resultHandler.getItemCount(result.getOwnerDocument());
+				int count = resultHandler.getItemCount(result
+						.getOwnerDocument());
 				if (count > 0) {
 					title = title + count + " new search results";
 				}
 
-				count = resultHandler.getQuestionCount(result.getOwnerDocument());
+				count = resultHandler.getQuestionCount(result
+						.getOwnerDocument());
 				if (count > 0) {
 					if (!title.equals("")) {
 						title = title + ", ";
@@ -196,7 +212,7 @@ public class TradeMeScanner implements Runnable {
 
 				emailProvider.sendEmail(title, resultHandler.toString(result),
 						resultHandler.toHtml(result));
-				
+
 				result = null;
 
 				System.out.println("Email sent");
@@ -245,7 +261,8 @@ public class TradeMeScanner implements Runnable {
 
 				if (!checkError(response)) {
 					document = resultHandler.getBody(response.getBody());
-					NodeList resultList = resultHandler.getListingQuestions(document);
+					NodeList resultList = resultHandler
+							.getListingQuestions(document);
 
 					index = 0;
 					int newQuestions = 0;
@@ -263,9 +280,10 @@ public class TradeMeScanner implements Runnable {
 							allQuestions.add(questionId);
 
 							if (result == null) {
-								result = resultHandler.createScanResultsDocument();
+								result = resultHandler
+										.createScanResultsDocument();
 							}
-							
+
 							if (resultItem == null) {
 								resultItem = addListingContents(result,
 										document);
