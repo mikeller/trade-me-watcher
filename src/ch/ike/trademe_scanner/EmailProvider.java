@@ -1,5 +1,7 @@
 package ch.ike.trademe_scanner;
 
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.Properties;
 
 import javax.mail.Message.RecipientType;
@@ -28,31 +30,43 @@ public class EmailProvider {
 	}
 
 	void sendEmail(String subject, String message, String htmlMessage) {
+		String fromAddress = props.getProperty("email.from");
+		if (fromAddress == null) {
+			fromAddress = "TradeMeScanner";
+		}
+		if (!fromAddress.contains("@")) {
+			try {
+				fromAddress = fromAddress + "@" + InetAddress.getLocalHost().getHostName();
+			} catch (UnknownHostException e) {
+				fromAddress = fromAddress + "@localhost";
+			}
+		}
+		
 		MimeMessage email = new MimeMessage(session);
-
+	
 		try {
-			email.setFrom(new InternetAddress(props.getProperty("email.from")));
+			email.setFrom(new InternetAddress(fromAddress));
 			email.addRecipient(RecipientType.TO,
 					new InternetAddress(props.getProperty("email.to")));
-
+	
 			email.setSubject(subject);
-
+	
 			Multipart multiPart = new MimeMultipart("alternative");
-
+	
 			if (htmlMessage != null) {
 				MimeBodyPart textPart = new MimeBodyPart();
 				textPart.setText(message, "utf-8");
-
+	
 				MimeBodyPart htmlPart = new MimeBodyPart();
 				htmlPart.setContent(htmlMessage, "text/html; charset=utf-8");
-
+	
 				multiPart.addBodyPart(textPart);
 				multiPart.addBodyPart(htmlPart);
 				email.setContent(multiPart);
 			} else {
 				email.setText(message);
 			}
-
+	
 			Transport.send(email);
 		} catch (MessagingException e) {
 			throw new RuntimeException(e);
