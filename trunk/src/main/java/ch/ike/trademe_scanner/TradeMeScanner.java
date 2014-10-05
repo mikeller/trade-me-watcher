@@ -123,7 +123,7 @@ public class TradeMeScanner implements Runnable {
 
 		prefs = Preferences.userNodeForPackage(this.getClass());
 
-		emailProvider = new EmailProvider(props);
+		emailProvider = new JavaxMailEmailProvider(props);
 
 		connector = new TradeMeConnector(props, prefs);
 
