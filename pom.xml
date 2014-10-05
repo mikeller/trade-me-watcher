@@ -42,8 +42,8 @@
 		</plugins>
 	</build>
 
-	<name>trademe_scanner</name>
-	<url>http://maven.apache.org</url>
+	<name>Trade Me Scanner</name>
+	<url>http://www.042.ch/</url>
 
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -68,4 +68,7 @@
 			<version>1.4</version>
 		</dependency>
 	</dependencies>
+	<scm>
+		<url>https://trade-me-watcher.googlecode.com/svn/</url>
+	</scm>
 </project>
