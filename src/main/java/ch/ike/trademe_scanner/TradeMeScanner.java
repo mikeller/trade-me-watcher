@@ -30,6 +30,8 @@ import org.w3c.dom.NodeList;
 
 public class TradeMeScanner implements Runnable {
 
+	private static final String TRADE_ME_SCANNER = "trademescanner";
+
 	private static final String TRADE_ME_SCANNER_XML = "TradeMeScanner.xml";
 
 	private final Properties props;
@@ -57,14 +59,16 @@ public class TradeMeScanner implements Runnable {
 				self.connector.deauthoriseUser();
 			} else if (argList.contains("get_access_token")) {
 				self.connector.printAccessToken();
-			} else if (argList.contains("clear_cache")) {
-				self.clearCache();
 			} else {
+				boolean clearCache = false;
+				if (argList.contains("clear_cache")) {
+					clearCache = true;
+				}
 				boolean interactive = false;
 				if (argList.contains("interactive")) {
 					interactive = true;
 				}
-				self.runScanner(interactive);
+				self.runScanner(clearCache, interactive);
 			}
 		} catch (RuntimeException e) {
 			StringWriter message = new StringWriter();
@@ -77,14 +81,14 @@ public class TradeMeScanner implements Runnable {
 		}
 	}
 
-	private void clearCache() {
-		persistence.clearCache();
-	}
-
 	public TradeMeScanner(String configFile) {
-		props = new EnvironmentBackedProperties(configFile, "trademescanner");
+		props = new EnvironmentBackedProperties(configFile, TRADE_ME_SCANNER);
 
-		persistence = new PreferencesPersistence(this.getClass());
+		if ("redis".equals(props.getProperty("persistence.method"))) {
+			persistence = new RedisPersistence(TRADE_ME_SCANNER);
+		} else {
+			persistence = new PreferencesPersistence(this.getClass());
+		}
 
 		emailProvider = new JavaxMailEmailProvider(props);
 
@@ -95,7 +99,7 @@ public class TradeMeScanner implements Runnable {
 		stopped = false;
 	}
 
-	private void runScanner(boolean interactive) {
+	private void runScanner(boolean clearCache, boolean interactive) {
 		final Thread mainThread = Thread.currentThread();
 		Runtime.getRuntime().addShutdownHook(new Thread() {
 			public void run() {
@@ -108,6 +112,10 @@ public class TradeMeScanner implements Runnable {
 				}
 			}
 		});
+		
+		if (clearCache || "true".equals(props.getProperty("clearcache"))) {
+			persistence.clearCache();
+		}
 
 		int interval = Integer.parseInt(props.getProperty("search.interval"));
 		System.out.println("Set search interval to " + interval + " seconds.");

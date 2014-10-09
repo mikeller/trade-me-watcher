@@ -3,6 +3,7 @@ package nz.co.trademe;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.util.Map.Entry;
 import java.util.Properties;
 
 import org.scribe.exceptions.OAuthException;
@@ -30,10 +31,11 @@ public class TradeMeConnector {
 	public void checkAuthorisation() {
 		String accessTokenString = props.getProperty("access.token");
 		String accessSecretString = props.getProperty("access.secret");
+		Entry<String, String> accessTokenData = persistence.getAccessToken();
 		if ((accessTokenString != null) && (accessSecretString != null)) {
 			accessToken = new Token(accessTokenString, accessSecretString);
-		} else if (persistence.hasAccessToken()) {
-			accessToken = new Token(persistence.getAccessToken(), persistence.getAccessTokenSecret());
+		} else if (accessTokenData != null) {
+			accessToken = new Token(accessTokenData.getKey(), accessTokenData.getValue());
 		} else {
 			System.out
 					.println("This application needs authorisation first.");
@@ -86,11 +88,12 @@ public class TradeMeConnector {
 	}
 
 	public void printAccessToken() {
-		if (persistence.hasAccessToken()) {
+		Entry<String, String> accessTokenData = persistence.getAccessToken();
+		if (accessTokenData != null) {
 			System.out.println("Access Token: "
-					+ persistence.getAccessToken());
+					+ accessTokenData.getKey());
 			System.out.println("Access Secret: "
-					+ persistence.getAccessTokenSecret());
+					+ accessTokenData.getValue());
 		} else {
 			System.out.println("Access Token not Set.");
 		}

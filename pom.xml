@@ -4,7 +4,7 @@
 
 	<groupId>ch.ike.trademe_scanner</groupId>
 	<artifactId>trademe_scanner</artifactId>
-	<version>0.2</version>
+	<version>0.3</version>
 	<packaging>jar</packaging>
 	<build>
 		<plugins>
@@ -65,6 +65,11 @@
 			<groupId>javax.mail</groupId>
 			<artifactId>mail</artifactId>
 			<version>1.4</version>
+		</dependency>
+		<dependency>
+			<groupId>net.sourceforge.argo</groupId>
+			<artifactId>argo</artifactId>
+			<version>3.12</version>
 		</dependency>
 		<dependency>
 			<groupId>redis.clients</groupId>
