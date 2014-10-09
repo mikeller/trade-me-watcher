@@ -66,11 +66,18 @@
 			<artifactId>mail</artifactId>
 			<version>1.4</version>
 		</dependency>
-<dependency>
-	<groupId>com.sendgrid</groupId>
-	<artifactId>sendgrid-java</artifactId>
-	<version>1.2.1</version>
-</dependency>
+		<dependency>
+			<groupId>redis.clients</groupId>
+			<artifactId>jedis</artifactId>
+			<version>2.0.0</version>
+			<type>jar</type>
+			<scope>compile</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.sendgrid</groupId>
+			<artifactId>sendgrid-java</artifactId>
+			<version>1.2.1</version>
+		</dependency>
 	</dependencies>
 	<scm>
 		<url>https://trade-me-watcher.googlecode.com/svn/</url>
