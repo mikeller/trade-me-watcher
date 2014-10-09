@@ -1,10 +1,7 @@
 package ch.ike.trademe_scanner;
 
 import java.io.BufferedReader;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -14,16 +11,12 @@ import java.util.Calendar;
 import java.util.GregorianCalendar;
 import java.util.HashSet;
 import java.util.Hashtable;
-import java.util.InvalidPropertiesFormatException;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.prefs.BackingStoreException;
-import java.util.prefs.Preferences;
 
 import javax.xml.bind.DatatypeConverter;
-import javax.xml.transform.stream.StreamSource;
 
 import nz.co.trademe.TradeMeApi;
 import nz.co.trademe.TradeMeConnector;
@@ -40,10 +33,7 @@ public class TradeMeScanner implements Runnable {
 	private static final String TRADE_ME_SCANNER_XML = "TradeMeScanner.xml";
 
 	private final Properties props;
-	private final Preferences prefs;
-	private final Preferences seenItems;
-	private final Preferences latestStartDates;
-	private final Preferences seenQuestions;
+	private final TradeMeScannerPersistence persistence;
 
 	private ResultHandler resultHandler;
 	private final TradeMeConnector connector;
@@ -59,6 +49,7 @@ public class TradeMeScanner implements Runnable {
 		if (argList.contains("-c")) {
 			configFile = argList.get(argList.indexOf("-c") + 1);
 		}
+
 		TradeMeScanner self = new TradeMeScanner(configFile);
 
 		try {
@@ -87,51 +78,17 @@ public class TradeMeScanner implements Runnable {
 	}
 
 	private void clearCache() {
-		try {
-			seenItems.removeNode();
-			latestStartDates.removeNode();
-			seenQuestions.removeNode();
-			prefs.flush();
-		} catch (BackingStoreException e) {
-			throw new RuntimeException(e);
-		}
+		persistence.clearCache();
 	}
 
 	public TradeMeScanner(String configFile) {
-		props = new Properties();
-		try {
-			InputStream in = null;
-			try {
-				try {
-					in = new FileInputStream(configFile);
-				} catch (FileNotFoundException e) {
-					in = new StreamSource(getClass().getResource(
-							"/" + TRADE_ME_SCANNER_XML).toString())
-							.getInputStream();
-				}
-				try {
-					props.loadFromXML(in);
-				} catch (InvalidPropertiesFormatException e) {
-					throw new RuntimeException(e);
-				}
-			} finally {
-				in.close();
-			}
-		} catch (IOException e) {
-			throw new RuntimeException(e);
-		}
+		props = new EnvironmentBackedProperties(configFile, "trademescanner");
 
-		prefs = Preferences.userNodeForPackage(this.getClass());
+		persistence = new PreferencesPersistence(this.getClass());
 
 		emailProvider = new JavaxMailEmailProvider(props);
 
-		connector = new TradeMeConnector(props, prefs);
-
-		seenItems = prefs.node("seen_items");
-
-		latestStartDates = prefs.node("latest_start_dates");
-
-		seenQuestions = prefs.node("seen_questions");
+		connector = new TradeMeConnector(props, persistence);
 
 		resultHandler = new ResultHandler();
 
@@ -157,9 +114,9 @@ public class TradeMeScanner implements Runnable {
 
 		Map<String, String> searches = new Hashtable<String, String>();
 		int index = 0;
-		while (props.containsKey("search." + index + ".parameters")) {
-			String parameters = props.getProperty("search." + index
-					+ ".parameters");
+		String parameters = props
+				.getProperty("search." + index + ".parameters");
+		while (parameters != null) {
 			String title = props.getProperty("search." + index + ".title",
 					"<unspecified>");
 			searches.put(parameters, title);
@@ -167,6 +124,7 @@ public class TradeMeScanner implements Runnable {
 					+ parameters);
 
 			index = index + 1;
+			parameters = props.getProperty("search." + index + ".parameters");
 		}
 
 		connector.service = new ServiceBuilder().provider(TradeMeApi.class)
@@ -231,13 +189,8 @@ public class TradeMeScanner implements Runnable {
 	}
 
 	private Element searchNewQuestions(Element result) {
-		Set<String> allQuestions;
-		try {
-			allQuestions = new HashSet<String>(Arrays.asList(seenQuestions
-					.keys()));
-		} catch (BackingStoreException e) {
-			throw new RuntimeException(e);
-		}
+		PersistenceObject seenQuestions = persistence.getSeenQuestions();
+		Set<String> allQuestions = new HashSet<String>(seenQuestions.getKeys());
 
 		int index;
 		Set<String> expiredQuestions = new HashSet<String>(allQuestions);
@@ -311,7 +264,7 @@ public class TradeMeScanner implements Runnable {
 				Calendar lastSeen = null;
 				try {
 					lastSeen = DatatypeConverter.parseDateTime(seenQuestions
-							.get(questionId, null));
+							.get(questionId));
 					lastSeen.add(Calendar.DATE, 1);
 				} catch (IllegalArgumentException e) {
 
@@ -322,11 +275,7 @@ public class TradeMeScanner implements Runnable {
 				}
 			}
 
-			try {
-				seenQuestions.flush();
-			} catch (BackingStoreException e) {
-				throw new RuntimeException(e);
-			}
+			seenQuestions.commit();
 		}
 		return result;
 	}
@@ -349,12 +298,9 @@ public class TradeMeScanner implements Runnable {
 
 	private Element searchNewListings(Map<String, String> searches,
 			Element result) {
-		Set<String> allItems;
-		try {
-			allItems = new HashSet<String>(Arrays.asList(seenItems.keys()));
-		} catch (BackingStoreException e) {
-			throw new RuntimeException(e);
-		}
+		PersistenceObject seenItems = persistence.getSeenItems();
+		PersistenceObject latestStartDates = persistence.getLatestStartDates();
+		Set<String> allItems = new HashSet<String>(seenItems.getKeys());
 
 		int index;
 		Set<String> expiredItems = new HashSet<String>(allItems);
@@ -362,8 +308,8 @@ public class TradeMeScanner implements Runnable {
 		Element searchResult;
 
 		for (String parameters : searches.keySet()) {
-			String latestDateString = latestStartDates.get(
-					searches.get(parameters), null);
+			String latestDateString = latestStartDates.get(searches
+					.get(parameters));
 			Calendar latestDate = null;
 			if (latestDateString != null) {
 				latestDate = DatatypeConverter.parseDateTime(latestDateString);
@@ -417,11 +363,7 @@ public class TradeMeScanner implements Runnable {
 					latestStartDates.put(searches.get(parameters),
 							DatatypeConverter.printDateTime(latestDate));
 				}
-				try {
-					latestStartDates.flush();
-				} catch (BackingStoreException e) {
-					throw new RuntimeException(e);
-				}
+				latestStartDates.commit();
 
 				System.out.println("Found " + items.getLength() + " items, "
 						+ newItems + " new items for search \""
@@ -432,8 +374,8 @@ public class TradeMeScanner implements Runnable {
 		for (String itemId : expiredItems) {
 			Calendar lastSeen = null;
 			try {
-				lastSeen = DatatypeConverter.parseDateTime(seenItems.get(
-						itemId, null));
+				lastSeen = DatatypeConverter.parseDateTime(seenItems
+						.get(itemId));
 				lastSeen.add(Calendar.DATE, 1);
 			} catch (IllegalArgumentException e) {
 
@@ -444,22 +386,15 @@ public class TradeMeScanner implements Runnable {
 			}
 		}
 
-		try {
-			seenItems.flush();
-		} catch (BackingStoreException e) {
-			throw new RuntimeException(e);
-		}
+		seenItems.commit();
+
 		return result;
 	}
 
 	private Element searchNewListingsNoDate(Map<String, String> searches,
 			Element result) {
-		Set<String> allItems;
-		try {
-			allItems = new HashSet<String>(Arrays.asList(seenItems.keys()));
-		} catch (BackingStoreException e) {
-			throw new RuntimeException(e);
-		}
+		PersistenceObject seenItems = persistence.getSeenItems();
+		Set<String> allItems = new HashSet<String>(seenItems.getKeys());
 
 		int index;
 		Set<String> expiredItems = new HashSet<String>(allItems);
@@ -511,8 +446,8 @@ public class TradeMeScanner implements Runnable {
 		for (String itemId : expiredItems) {
 			Calendar lastSeen = null;
 			try {
-				lastSeen = DatatypeConverter.parseDateTime(seenItems.get(
-						itemId, null));
+				lastSeen = DatatypeConverter.parseDateTime(seenItems
+						.get(itemId));
 				lastSeen.add(Calendar.DATE, 1);
 			} catch (IllegalArgumentException e) {
 
@@ -523,11 +458,8 @@ public class TradeMeScanner implements Runnable {
 			}
 		}
 
-		try {
-			seenItems.flush();
-		} catch (BackingStoreException e) {
-			throw new RuntimeException(e);
-		}
+		seenItems.commit();
+
 		return result;
 	}
 
