@@ -1,0 +1,11 @@
+applications:
+- name: trade-me-watcher
+  memory: 128M
+  instances: 1
+  path: ./target/trademe_scanner-0.3-jar-with-dependencies.jar
+  buildpack: java_buildpack
+  no-route: true
+  env:
+    trademescanner_persistence_method: redis
+  services:
+  - Redis Cloud-ap
