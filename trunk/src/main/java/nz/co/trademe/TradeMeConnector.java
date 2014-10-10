@@ -85,6 +85,8 @@ public class TradeMeConnector {
 
 	public void deauthoriseUser() {
 		persistence.deleteAccessToken();
+
+		System.out.println("Deauthorised user.");
 	}
 
 	public void printAccessToken() {

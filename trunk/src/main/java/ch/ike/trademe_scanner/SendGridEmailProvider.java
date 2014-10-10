@@ -1,87 +1,45 @@
 package ch.ike.trademe_scanner;
 
-import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.util.Properties;
 
-import javax.mail.Message.RecipientType;
-import javax.mail.MessagingException;
-import javax.mail.Multipart;
+import javax.mail.Authenticator;
+import javax.mail.PasswordAuthentication;
 import javax.mail.Session;
-import javax.mail.Transport;
-import javax.mail.internet.InternetAddress;
-import javax.mail.internet.MimeBodyPart;
-import javax.mail.internet.MimeMessage;
-import javax.mail.internet.MimeMultipart;
 
-public class SendGridEmailProvider implements EmailProvider {
+import argo.jdom.JsonNode;
+import argo.jdom.JsonRootNode;
 
-	private final Properties props;
+public class SendGridEmailProvider extends JavaxMailEmailProvider implements EmailProvider {
 
-	private Session session;
+	private final String username;
+	private final String hostname;
+	private final String password;
 
-	public SendGridEmailProvider(Properties props) {
-		this.props = props;
-
-		Properties properties = System.getProperties();
-		properties.setProperty("mail.smtp.host",
-				props.getProperty("email.smtphost"));
-		session = Session.getDefaultInstance(properties);
-	}
-
-	/* (non-Javadoc)
-	 * @see ch.ike.trademe_scanner.EmailProvider#sendEmail(java.lang.String, java.lang.String, java.lang.String)
-	 */
-	@Override
-	public void sendEmail(String subject, String message, String htmlMessage) {
-		String fromAddress = props.getProperty("email.from");
-		if (fromAddress == null) {
-			fromAddress = "TradeMeScanner";
-		}
-		if (!fromAddress.contains("@")) {
-			try {
-				fromAddress = fromAddress + "@" + InetAddress.getLocalHost().getHostName();
-			} catch (UnknownHostException e) {
-				fromAddress = fromAddress + "@localhost";
-			}
-		}
+	public SendGridEmailProvider(Properties props, JsonRootNode vcapServices) {
+		super(props);
 		
-		MimeMessage email = new MimeMessage(session);
-	
-		try {
-			email.setFrom(new InternetAddress(fromAddress));
-			email.addRecipient(RecipientType.TO,
-					new InternetAddress(props.getProperty("email.to")));
-	
-			email.setSubject(subject);
-	
-			Multipart multiPart = new MimeMultipart("alternative");
-	
-			if (htmlMessage != null) {
-				MimeBodyPart textPart = new MimeBodyPart();
-				textPart.setText(message, "utf-8");
-	
-				MimeBodyPart htmlPart = new MimeBodyPart();
-				htmlPart.setContent(htmlMessage, "text/html; charset=utf-8");
-	
-				multiPart.addBodyPart(textPart);
-				multiPart.addBodyPart(htmlPart);
-				email.setContent(multiPart);
-			} else {
-				email.setText(message);
-			}
-	
-			Transport.send(email);
-		} catch (MessagingException e) {
-			throw new RuntimeException(e);
-		}
+		JsonNode rediscloudNode = vcapServices.getNode("sendgrid");
+		JsonNode credentials = rediscloudNode.getNode(0).getNode("credentials");
+		username = credentials.getStringValue("username");
+		hostname = credentials.getStringValue("hostname");
+		password = credentials.getStringValue("password");
 	}
 
-	/* (non-Javadoc)
-	 * @see ch.ike.trademe_scanner.EmailProvider#sendEmail(java.lang.String, java.lang.String)
-	 */
 	@Override
-	public void sendEmail(String subject, String message) {
-		sendEmail(subject, message, null);
+	protected Session createSession() {
+		Properties properties = new Properties();
+		properties.put("mail.transport.protocol", "smtp");
+		properties.put("mail.smtp.host", hostname);
+		properties.put("mail.smtp.port", 587);
+		properties.put("mail.smtp.auth", "true");
+
+		System.out.println("Setting up mail out using SendGrid, using username " + username + " on " + hostname + ".");
+
+		return Session.getDefaultInstance(properties, new Authenticator() {
+		       public PasswordAuthentication getPasswordAuthentication() {
+		           return new PasswordAuthentication(username, password);		
+		       }
+		});
 	}
+
 }

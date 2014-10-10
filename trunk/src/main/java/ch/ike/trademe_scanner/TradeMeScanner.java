@@ -28,6 +28,10 @@ import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
+import argo.jdom.JdomParser;
+import argo.jdom.JsonRootNode;
+import argo.saj.InvalidSyntaxException;
+
 public class TradeMeScanner implements Runnable {
 
 	private static final String TRADE_ME_SCANNER = "trademescanner";
@@ -36,9 +40,11 @@ public class TradeMeScanner implements Runnable {
 
 	private final Properties props;
 	private final TradeMeScannerPersistence persistence;
+	private final TradeMeConnector connector;
+
+	private JsonRootNode vcapServices;
 
 	private ResultHandler resultHandler;
-	private final TradeMeConnector connector;
 
 	private EmailProvider emailProvider;
 
@@ -85,18 +91,40 @@ public class TradeMeScanner implements Runnable {
 		props = new EnvironmentBackedProperties(configFile, TRADE_ME_SCANNER);
 
 		if ("redis".equals(props.getProperty("persistence.method"))) {
-			persistence = new RedisPersistence(TRADE_ME_SCANNER);
+			persistence = new RedisPersistence(TRADE_ME_SCANNER,
+					getVcapServices());
 		} else {
 			persistence = new PreferencesPersistence(this.getClass());
 		}
 
-		emailProvider = new JavaxMailEmailProvider(props);
+		if ("sendgrid".equals(props.getProperty("email.method"))) {
+			emailProvider = new SendGridEmailProvider(props, getVcapServices());
+		} else {
+			emailProvider = new JavaxMailEmailProvider(props);
+		}
 
 		connector = new TradeMeConnector(props, persistence);
 
 		resultHandler = new ResultHandler();
 
 		stopped = false;
+	}
+
+	private JsonRootNode getVcapServices() {
+		if (vcapServices == null) {
+			String vcapServicesEnv = System.getenv("VCAP_SERVICES");
+			if (vcapServicesEnv != null && vcapServicesEnv.length() > 0) {
+				try {
+					vcapServices = new JdomParser().parse(vcapServicesEnv);
+				} catch (InvalidSyntaxException e) {
+					throw new RuntimeException(e);
+				}
+			} else {
+				throw new RuntimeException(
+						"No 'VCAP_SERVICES' environment variable found.");
+			}
+		}
+		return vcapServices;
 	}
 
 	private void runScanner(boolean clearCache, boolean interactive) {
@@ -112,9 +140,11 @@ public class TradeMeScanner implements Runnable {
 				}
 			}
 		});
-		
+
 		if (clearCache || "true".equals(props.getProperty("clearcache"))) {
 			persistence.clearCache();
+
+			System.out.println("Cleared cache.");
 		}
 
 		int interval = Integer.parseInt(props.getProperty("search.interval"));
@@ -142,6 +172,8 @@ public class TradeMeScanner implements Runnable {
 		connector.checkAuthorisation();
 
 		if (interactive) {
+			System.out.println("Starting in interactive mode...");
+
 			Thread interactiveThread = new Thread(this);
 			interactiveThread.start();
 		}

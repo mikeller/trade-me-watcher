@@ -7,10 +7,8 @@ import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.JedisPoolConfig;
 import redis.clients.jedis.Protocol;
-import argo.jdom.JdomParser;
 import argo.jdom.JsonNode;
 import argo.jdom.JsonRootNode;
-import argo.saj.InvalidSyntaxException;
 
 public class RedisPersistence implements TradeMeScannerPersistence {
 	private final String prefix;
@@ -20,35 +18,21 @@ public class RedisPersistence implements TradeMeScannerPersistence {
 	private PersistenceObject seenItems;
 	private PersistenceObject latestStartDates;
 
-	public RedisPersistence(String prefix) {
+	public RedisPersistence(String prefix, JsonRootNode vcapServices) {
 		this.prefix = prefix + ":";
 
-		String vcapServices = System.getenv("VCAP_SERVICES");
-		if (vcapServices != null && vcapServices.length() > 0) {
-			// parsing rediscloud credentials
-			JsonRootNode root;
-			try {
-				root = new JdomParser().parse(vcapServices);
-			} catch (InvalidSyntaxException e) {
-				throw new RuntimeException(e);
-			}
-			JsonNode rediscloudNode = root.getNode("rediscloud");
-			JsonNode credentials = rediscloudNode.getNode(0).getNode(
-					"credentials");
+		JsonNode rediscloudNode = vcapServices.getNode("rediscloud");
+		JsonNode credentials = rediscloudNode.getNode(0).getNode("credentials");
 
-			pool = new JedisPool(new JedisPoolConfig(),
-					credentials.getStringValue("hostname"),
-					Integer.parseInt(credentials.getStringValue("port")),
-					Protocol.DEFAULT_TIMEOUT,
-					credentials.getStringValue("password"));
+		pool = new JedisPool(new JedisPoolConfig(),
+				credentials.getStringValue("hostname"),
+				Integer.parseInt(credentials.getStringValue("port")),
+				Protocol.DEFAULT_TIMEOUT,
+				credentials.getStringValue("password"));
 
-			System.out.println("Set up persistence with redis on "
-					+ credentials.getStringValue("hostname") + ":"
-					+ credentials.getStringValue("port") + ".");
-		} else {
-			throw new RuntimeException(
-					"No redis configuration found in 'VCAP_SERVICES' environment variable.");
-		}
+		System.out.println("Set up persistence with redis on "
+				+ credentials.getStringValue("hostname") + ":"
+				+ credentials.getStringValue("port") + ".");
 	}
 
 	@Override

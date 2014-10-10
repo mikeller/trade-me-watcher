@@ -13,6 +13,7 @@
 	<entry key="search.0.title">Search Title 1</entry>
 	<entry key="search.1.parameters">Search Parameters 2</entry>
 	<entry key="search.1.title">Search Title 2</entry>
+	<entry key="email.method">Email method used, set this to "sendgrid" for SendGrid, default is javax.mail</entry>
 	<entry key="email.smtphost">Your provider's SMTP host</entry>
 	<entry key="email.from">From address(optional)</entry>
 	<entry key="email.to">To address</entry>
