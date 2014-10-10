@@ -22,16 +22,27 @@ public class JavaxMailEmailProvider implements EmailProvider {
 
 	public JavaxMailEmailProvider(Properties props) {
 		this.props = props;
-
-		Properties properties = System.getProperties();
-		properties.setProperty("mail.smtp.host",
-				props.getProperty("email.smtphost"));
-		session = Session.getDefaultInstance(properties);
 	}
 
-	/* (non-Javadoc)
-	 * @see ch.ike.trademe_scanner.EmailProvider#sendEmail(java.lang.String, java.lang.String, java.lang.String)
-	 */
+	private Session getSession() {
+		if (session == null) {
+			session = createSession();
+		}
+		
+		return session;
+	}
+
+	protected Session createSession() {
+		Properties properties = new Properties();
+		properties.put("mail.transport.protocol", "smtp");
+		properties.put("mail.smtp.host",
+				props.getProperty("email.smtphost"));
+		
+		System.out.println("Setting up mail out using javax.mail, with SMTP host set to " + props.getProperty("email.smtphost") + ".");
+
+		return Session.getDefaultInstance(properties);
+	}
+
 	@Override
 	public void sendEmail(String subject, String message, String htmlMessage) {
 		String fromAddress = props.getProperty("email.from");
@@ -40,46 +51,44 @@ public class JavaxMailEmailProvider implements EmailProvider {
 		}
 		if (!fromAddress.contains("@")) {
 			try {
-				fromAddress = fromAddress + "@" + InetAddress.getLocalHost().getHostName();
+				fromAddress = fromAddress + "@"
+						+ InetAddress.getLocalHost().getHostName();
 			} catch (UnknownHostException e) {
 				fromAddress = fromAddress + "@localhost";
 			}
 		}
-		
-		MimeMessage email = new MimeMessage(session);
-	
+
+		MimeMessage email = new MimeMessage(getSession());
+
 		try {
 			email.setFrom(new InternetAddress(fromAddress));
 			email.addRecipient(RecipientType.TO,
 					new InternetAddress(props.getProperty("email.to")));
-	
+
 			email.setSubject(subject);
-	
+
 			Multipart multiPart = new MimeMultipart("alternative");
-	
+
 			if (htmlMessage != null) {
 				MimeBodyPart textPart = new MimeBodyPart();
 				textPart.setText(message, "utf-8");
-	
+
 				MimeBodyPart htmlPart = new MimeBodyPart();
 				htmlPart.setContent(htmlMessage, "text/html; charset=utf-8");
-	
+
 				multiPart.addBodyPart(textPart);
 				multiPart.addBodyPart(htmlPart);
 				email.setContent(multiPart);
 			} else {
 				email.setText(message);
 			}
-	
+
 			Transport.send(email);
 		} catch (MessagingException e) {
 			throw new RuntimeException(e);
 		}
 	}
 
-	/* (non-Javadoc)
-	 * @see ch.ike.trademe_scanner.EmailProvider#sendEmail(java.lang.String, java.lang.String)
-	 */
 	@Override
 	public void sendEmail(String subject, String message) {
 		sendEmail(subject, message, null);
