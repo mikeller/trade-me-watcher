@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">
+<properties>
+	<comment>Example properties file</comment>
+	<entry key="clearcache">Set to "true" to clear cache before starting</entry>
+	<entry key="persistence.method">Persistence method used, set to "redis" for redis, default is java Preferences</entry>
+	<entry key="consumer.key">TradeMe Application Consumer Key</entry>
+	<entry key="consumer.secret">TradeMe Application Consumer Secret</entry>
+	<entry key="access.token">TradeMe User Access Token (optional)</entry>
+	<entry key="access.secret">TradeMe User Access Secret (optional)</entry>
+	<entry key="search.interval">600</entry>
+	<entry key="search.0.parameters">Search Parameters 1</entry>
+	<entry key="search.0.title">Search Title 1</entry>
+	<entry key="search.1.parameters">Search Parameters 2</entry>
+	<entry key="search.1.title">Search Title 2</entry>
+	<entry key="email.method">Email method used, set this to "sendgrid" for SendGrid, default is javax.mail</entry>
+	<entry key="email.smtphost">Your provider's SMTP host</entry>
+	<entry key="email.from">From address(optional)</entry>
+	<entry key="email.to">To address</entry>
+</properties>
