@@ -230,93 +230,100 @@ public class TradeMeScanner implements Runnable {
 
 	private Element searchNewQuestions(Element result) {
 		PersistenceObject seenQuestions = persistence.getSeenQuestions();
-		Set<String> allQuestions = new HashSet<String>(seenQuestions.getKeys());
+		try {
+			Set<String> allQuestions = new HashSet<String>(
+					seenQuestions.getKeys());
 
-		int index;
-		Set<String> expiredQuestions = new HashSet<String>(allQuestions);
-		Calendar now = GregorianCalendar.getInstance();
+			int index;
+			Set<String> expiredQuestions = new HashSet<String>(allQuestions);
+			Calendar now = GregorianCalendar.getInstance();
 
-		Response response = connector
-				.sendGetRequest("https://api.trademe.co.nz/v1/MyTradeMe/Watchlist/All.xml");
+			Response response = connector
+					.sendGetRequest("https://api.trademe.co.nz/v1/MyTradeMe/Watchlist/All.xml");
 
-		if (!checkError(response)) {
-			Document document = resultHandler.getBody(response.getBody());
-			NodeList watchlistItems = resultHandler.getWatchlistItem(document);
+			if (!checkError(response)) {
+				Document document = resultHandler.getBody(response.getBody());
+				NodeList watchlistItems = resultHandler
+						.getWatchlistItem(document);
 
-			int itemIndex = 0;
-			while (itemIndex < watchlistItems.getLength()) {
-				Node item = watchlistItems.item(itemIndex);
-				String itemTitle = resultHandler.getTitle(item);
+				int itemIndex = 0;
+				while (itemIndex < watchlistItems.getLength()) {
+					Node item = watchlistItems.item(itemIndex);
+					String itemTitle = resultHandler.getTitle(item);
 
-				response = connector
-						.sendGetRequest("https://api.trademe.co.nz/v1/Listings/"
-								+ resultHandler.getListingId(item) + ".xml");
+					response = connector
+							.sendGetRequest("https://api.trademe.co.nz/v1/Listings/"
+									+ resultHandler.getListingId(item) + ".xml");
 
-				if (!checkError(response)) {
-					document = resultHandler.getBody(response.getBody());
-					NodeList resultList = resultHandler
-							.getListingQuestions(document);
+					if (!checkError(response)) {
+						document = resultHandler.getBody(response.getBody());
+						NodeList resultList = resultHandler
+								.getListingQuestions(document);
 
-					index = 0;
-					int newQuestions = 0;
-					Element questions = null;
-					Element resultItem = null;
-					while (index < resultList.getLength()) {
-						Element question = ((Element) resultList.item(index));
-						String questionId = resultHandler
-								.getQuestionId(question);
+						index = 0;
+						int newQuestions = 0;
+						Element questions = null;
+						Element resultItem = null;
+						while (index < resultList.getLength()) {
+							Element question = ((Element) resultList
+									.item(index));
+							String questionId = resultHandler
+									.getQuestionId(question);
 
-						expiredQuestions.remove(questionId);
-						seenQuestions.put(questionId,
-								DatatypeConverter.printDateTime(now));
-						if (!allQuestions.contains(questionId)) {
-							allQuestions.add(questionId);
+							expiredQuestions.remove(questionId);
+							seenQuestions.put(questionId,
+									DatatypeConverter.printDateTime(now));
+							if (!allQuestions.contains(questionId)) {
+								allQuestions.add(questionId);
 
-							if (result == null) {
-								result = resultHandler
-										.createScanResultsDocument();
+								if (result == null) {
+									result = resultHandler
+											.createScanResultsDocument();
+								}
+
+								if (resultItem == null) {
+									resultItem = addListingContents(result,
+											document);
+								}
+
+								questions = resultHandler.addQuestion(
+										questions, resultItem, question);
+
+								newQuestions = newQuestions + 1;
 							}
 
-							if (resultItem == null) {
-								resultItem = addListingContents(result,
-										document);
-							}
-
-							questions = resultHandler.addQuestion(questions,
-									resultItem, question);
-
-							newQuestions = newQuestions + 1;
+							index = index + 1;
 						}
 
-						index = index + 1;
+						System.out.println("Found " + resultList.getLength()
+								+ " questions, " + newQuestions
+								+ " new questions for watchlist item \""
+								+ itemTitle + "\".");
 					}
 
-					System.out.println("Found " + resultList.getLength()
-							+ " questions, " + newQuestions
-							+ " new questions for watchlist item \""
-							+ itemTitle + "\".");
+					itemIndex = itemIndex + 1;
 				}
 
-				itemIndex = itemIndex + 1;
-			}
+				for (String questionId : expiredQuestions) {
+					Calendar lastSeen = null;
+					try {
+						lastSeen = DatatypeConverter
+								.parseDateTime(seenQuestions.get(questionId));
+						lastSeen.add(Calendar.DATE, 1);
+					} catch (IllegalArgumentException e) {
 
-			for (String questionId : expiredQuestions) {
-				Calendar lastSeen = null;
-				try {
-					lastSeen = DatatypeConverter.parseDateTime(seenQuestions
-							.get(questionId));
-					lastSeen.add(Calendar.DATE, 1);
-				} catch (IllegalArgumentException e) {
+					}
 
-				}
-
-				if ((lastSeen == null) || lastSeen.before(now)) {
-					seenQuestions.remove(questionId);
+					if ((lastSeen == null) || lastSeen.before(now)) {
+						seenQuestions.remove(questionId);
+					}
 				}
 			}
 
+		} finally {
 			seenQuestions.commit();
 		}
+
 		return result;
 	}
 
@@ -339,166 +346,187 @@ public class TradeMeScanner implements Runnable {
 	private Element searchNewListings(Map<String, String> searches,
 			Element result) {
 		PersistenceObject seenItems = persistence.getSeenItems();
-		PersistenceObject latestStartDates = persistence.getLatestStartDates();
-		Set<String> allItems = new HashSet<String>(seenItems.getKeys());
+		try {
+			Set<String> allItems = new HashSet<String>(seenItems.getKeys());
 
-		int index;
-		Set<String> expiredItems = new HashSet<String>(allItems);
-		Calendar now = GregorianCalendar.getInstance();
-		Element searchResult;
+			int index;
+			Set<String> expiredItems = new HashSet<String>(allItems);
+			Calendar now = GregorianCalendar.getInstance();
+			Element searchResult;
 
-		for (String parameters : searches.keySet()) {
-			String latestDateString = latestStartDates.get(searches
-					.get(parameters));
-			Calendar latestDate = null;
-			if (latestDateString != null) {
-				latestDate = DatatypeConverter.parseDateTime(latestDateString);
-			}
-
-			String request = "https://api.trademe.co.nz/v1/Search/General.xml?photo_size=List&"
-					+ parameters;
-
-			if (latestDate != null) {
-				request = request + "&date_from="
-						+ DatatypeConverter.printDateTime(latestDate);
-			}
-
-			Response response = connector.sendGetRequest(request);
-
-			if (!checkError(response)) {
-				Document document = resultHandler.getBody(response.getBody());
-				NodeList items = resultHandler.getSearchListings(document);
-
-				searchResult = null;
-
-				index = 0;
-				int newItems = 0;
-				while (index < items.getLength()) {
-					Element item = ((Element) items.item(index));
-					String listingId = resultHandler.getListingId(item);
-					Calendar startDate = resultHandler.getStartDate(item);
-					if ((latestDate == null) || latestDate.before(startDate)) {
-						latestDate = startDate;
-					}
-
-					expiredItems.remove(listingId);
-					seenItems.put(listingId,
-							DatatypeConverter.printDateTime(now));
-					if (!allItems.contains(listingId)) {
-						allItems.add(listingId);
-
-						if (result == null) {
-							result = resultHandler.createScanResultsDocument();
-						}
-						searchResult = resultHandler.addItem(searchResult,
-								result, searches.get(parameters), item);
-
-						newItems = newItems + 1;
-					}
-
-					index = index + 1;
-				}
-
-				if (latestDate != null) {
-					latestStartDates.put(searches.get(parameters),
-							DatatypeConverter.printDateTime(latestDate));
-				}
-				latestStartDates.commit();
-
-				System.out.println("Found " + items.getLength() + " items, "
-						+ newItems + " new items for search \""
-						+ searches.get(parameters) + "\".");
-			}
-		}
-
-		for (String itemId : expiredItems) {
-			Calendar lastSeen = null;
+			PersistenceObject latestStartDates = persistence
+					.getLatestStartDates();
 			try {
-				lastSeen = DatatypeConverter.parseDateTime(seenItems
-						.get(itemId));
-				lastSeen.add(Calendar.DATE, 1);
-			} catch (IllegalArgumentException e) {
+				for (String parameters : searches.keySet()) {
+					String latestDateString = latestStartDates.get(searches
+							.get(parameters));
+					Calendar latestDate = null;
+					if (latestDateString != null) {
+						latestDate = DatatypeConverter
+								.parseDateTime(latestDateString);
+					}
 
+					String request = "https://api.trademe.co.nz/v1/Search/General.xml?photo_size=List&"
+							+ parameters;
+
+					if (latestDate != null) {
+						request = request + "&date_from="
+								+ DatatypeConverter.printDateTime(latestDate);
+					}
+
+					Response response = connector.sendGetRequest(request);
+
+					if (!checkError(response)) {
+						Document document = resultHandler.getBody(response
+								.getBody());
+						NodeList items = resultHandler
+								.getSearchListings(document);
+
+						searchResult = null;
+
+						index = 0;
+						int newItems = 0;
+						while (index < items.getLength()) {
+							Element item = ((Element) items.item(index));
+							String listingId = resultHandler.getListingId(item);
+							Calendar startDate = resultHandler
+									.getStartDate(item);
+							if ((latestDate == null)
+									|| latestDate.before(startDate)) {
+								latestDate = startDate;
+							}
+
+							expiredItems.remove(listingId);
+							seenItems.put(listingId,
+									DatatypeConverter.printDateTime(now));
+							if (!allItems.contains(listingId)) {
+								allItems.add(listingId);
+
+								if (result == null) {
+									result = resultHandler
+											.createScanResultsDocument();
+								}
+								searchResult = resultHandler.addItem(
+										searchResult, result,
+										searches.get(parameters), item);
+
+								newItems = newItems + 1;
+							}
+
+							index = index + 1;
+						}
+
+						if (latestDate != null) {
+							latestStartDates
+									.put(searches.get(parameters),
+											DatatypeConverter
+													.printDateTime(latestDate));
+						}
+
+						System.out.println("Found " + items.getLength()
+								+ " items, " + newItems
+								+ " new items for search \""
+								+ searches.get(parameters) + "\".");
+					}
+				}
+			} finally {
+				latestStartDates.commit();
 			}
 
-			if ((lastSeen == null) || lastSeen.before(now)) {
-				seenItems.remove(itemId);
+			for (String itemId : expiredItems) {
+				Calendar lastSeen = null;
+				try {
+					lastSeen = DatatypeConverter.parseDateTime(seenItems
+							.get(itemId));
+					lastSeen.add(Calendar.DATE, 1);
+				} catch (IllegalArgumentException e) {
+
+				}
+
+				if ((lastSeen == null) || lastSeen.before(now)) {
+					seenItems.remove(itemId);
+				}
 			}
+
+		} finally {
+			seenItems.commit();
 		}
-
-		seenItems.commit();
-
 		return result;
 	}
 
 	private Element searchNewListingsNoDate(Map<String, String> searches,
 			Element result) {
 		PersistenceObject seenItems = persistence.getSeenItems();
-		Set<String> allItems = new HashSet<String>(seenItems.getKeys());
+		try {
+			Set<String> allItems = new HashSet<String>(seenItems.getKeys());
 
-		int index;
-		Set<String> expiredItems = new HashSet<String>(allItems);
-		Calendar now = GregorianCalendar.getInstance();
-		Element searchResult;
+			int index;
+			Set<String> expiredItems = new HashSet<String>(allItems);
+			Calendar now = GregorianCalendar.getInstance();
+			Element searchResult;
 
-		for (String parameters : searches.keySet()) {
-			Response response = connector
-					.sendGetRequest("https://api.trademe.co.nz/v1/Search/General.xml?photo_size=List&"
-							+ parameters);
+			for (String parameters : searches.keySet()) {
+				Response response = connector
+						.sendGetRequest("https://api.trademe.co.nz/v1/Search/General.xml?photo_size=List&"
+								+ parameters);
 
-			if (!checkError(response)) {
-				Document document = resultHandler.getBody(response.getBody());
-				NodeList items = resultHandler.getSearchListings(document);
+				if (!checkError(response)) {
+					Document document = resultHandler.getBody(response
+							.getBody());
+					NodeList items = resultHandler.getSearchListings(document);
 
-				searchResult = null;
+					searchResult = null;
 
-				index = 0;
-				int newItems = 0;
-				while (index < items.getLength()) {
-					Element item = ((Element) items.item(index));
-					String listingId = resultHandler.getListingId(item);
+					index = 0;
+					int newItems = 0;
+					while (index < items.getLength()) {
+						Element item = ((Element) items.item(index));
+						String listingId = resultHandler.getListingId(item);
 
-					expiredItems.remove(listingId);
-					seenItems.put(listingId,
-							DatatypeConverter.printDateTime(now));
-					if (!allItems.contains(listingId)) {
-						allItems.add(listingId);
+						expiredItems.remove(listingId);
+						seenItems.put(listingId,
+								DatatypeConverter.printDateTime(now));
+						if (!allItems.contains(listingId)) {
+							allItems.add(listingId);
 
-						if (result == null) {
-							result = resultHandler.createScanResultsDocument();
+							if (result == null) {
+								result = resultHandler
+										.createScanResultsDocument();
+							}
+							searchResult = resultHandler.addItem(searchResult,
+									result, searches.get(parameters), item);
+
+							newItems = newItems + 1;
 						}
-						searchResult = resultHandler.addItem(searchResult,
-								result, searches.get(parameters), item);
 
-						newItems = newItems + 1;
+						index = index + 1;
 					}
 
-					index = index + 1;
+					System.out.println("Found " + items.getLength()
+							+ " items (not restricted by start date), "
+							+ newItems + " new items for search \""
+							+ searches.get(parameters) + "\".");
+				}
+			}
+
+			for (String itemId : expiredItems) {
+				Calendar lastSeen = null;
+				try {
+					lastSeen = DatatypeConverter.parseDateTime(seenItems
+							.get(itemId));
+					lastSeen.add(Calendar.DATE, 1);
+				} catch (IllegalArgumentException e) {
+
 				}
 
-				System.out.println("Found " + items.getLength()
-						+ " items (not restricted by start date), " + newItems
-						+ " new items for search \"" + searches.get(parameters)
-						+ "\".");
+				if ((lastSeen == null) || lastSeen.before(now)) {
+					seenItems.remove(itemId);
+				}
 			}
+
+		} finally {
+			seenItems.commit();
 		}
-
-		for (String itemId : expiredItems) {
-			Calendar lastSeen = null;
-			try {
-				lastSeen = DatatypeConverter.parseDateTime(seenItems
-						.get(itemId));
-				lastSeen.add(Calendar.DATE, 1);
-			} catch (IllegalArgumentException e) {
-
-			}
-
-			if ((lastSeen == null) || lastSeen.before(now)) {
-				seenItems.remove(itemId);
-			}
-		}
-
-		seenItems.commit();
 
 		return result;
 	}
