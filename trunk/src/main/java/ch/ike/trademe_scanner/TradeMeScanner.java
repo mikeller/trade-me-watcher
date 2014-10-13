@@ -310,7 +310,7 @@ public class TradeMeScanner implements Runnable {
 						lastSeen = DatatypeConverter
 								.parseDateTime(seenQuestions.get(questionId));
 						lastSeen.add(Calendar.DATE, 1);
-					} catch (IllegalArgumentException e) {
+					} catch (IllegalArgumentException | NullPointerException ee) {
 
 					}
 
@@ -439,7 +439,7 @@ public class TradeMeScanner implements Runnable {
 					lastSeen = DatatypeConverter.parseDateTime(seenItems
 							.get(itemId));
 					lastSeen.add(Calendar.DATE, 1);
-				} catch (IllegalArgumentException e) {
+				} catch (IllegalArgumentException | NullPointerException e) {
 
 				}
 
@@ -515,7 +515,7 @@ public class TradeMeScanner implements Runnable {
 					lastSeen = DatatypeConverter.parseDateTime(seenItems
 							.get(itemId));
 					lastSeen.add(Calendar.DATE, 1);
-				} catch (IllegalArgumentException e) {
+				} catch (IllegalArgumentException | NullPointerException e) {
 
 				}
 
