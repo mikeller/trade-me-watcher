@@ -17,7 +17,13 @@ public class RedisPersistenceObject implements PersistenceObject {
 
 	@Override
 	public Collection<String> getKeys() {
-		return getJedis().hkeys(keyName);
+		Collection<String> result = getJedis().hkeys(keyName);
+		if (result.isEmpty()) {
+			commit();
+			
+			result = getJedis().hkeys(keyName);
+		}
+		return result;
 	}
 
 	private Jedis getJedis() {
