@@ -24,7 +24,9 @@ public class RedisPersistence implements TradeMeScannerPersistence {
 		JsonNode rediscloudNode = vcapServices.getNode("rediscloud");
 		JsonNode credentials = rediscloudNode.getNode(0).getNode("credentials");
 
-		pool = new JedisPool(new JedisPoolConfig(),
+		JedisPoolConfig poolConfig = new JedisPoolConfig();
+		poolConfig.setTestOnBorrow(true);
+		pool = new JedisPool(poolConfig,
 				credentials.getStringValue("hostname"),
 				Integer.parseInt(credentials.getStringValue("port")),
 				Protocol.DEFAULT_TIMEOUT,
