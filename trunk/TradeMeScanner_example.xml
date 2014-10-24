@@ -3,7 +3,7 @@
 <properties>
 	<comment>Example properties file</comment>
 	<entry key="clearcache">Set to "true" to clear cache before starting</entry>
-	<entry key="persistence.method">Persistence method used, set to "redis" for redis, default is java Preferences</entry>
+	<entry key="persistence.method">Persistence method used, set to "redis" for redis, postgres for postgres SQL, default is java Preferences</entry>
 	<entry key="consumer.key">TradeMe Application Consumer Key</entry>
 	<entry key="consumer.secret">TradeMe Application Consumer Secret</entry>
 	<entry key="access.token">TradeMe User Access Token (optional)</entry>

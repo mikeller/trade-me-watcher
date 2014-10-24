@@ -93,6 +93,9 @@ public class TradeMeScanner implements Runnable {
 		if ("redis".equals(props.getProperty("persistence.method"))) {
 			persistence = new RedisPersistence(TRADE_ME_SCANNER,
 					getVcapServices());
+		} else if ("postgres".equals(props.getProperty("persistence.method"))) {
+			persistence = new PostgresPersistence(TRADE_ME_SCANNER,
+					getVcapServices());
 		} else {
 			persistence = new PreferencesPersistence(this.getClass());
 		}
