@@ -100,6 +100,7 @@ public class TradeMeConnector {
 			System.out.println("Access Token not Set.");
 		}
 	}
+	
 	public Response sendGetRequest(String url) {
 		OAuthRequest request = new OAuthRequest(Verb.GET, url);
 		service.signRequest(accessToken, request);

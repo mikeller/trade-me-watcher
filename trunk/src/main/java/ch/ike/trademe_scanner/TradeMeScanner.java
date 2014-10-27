@@ -1,8 +1,7 @@
 package ch.ike.trademe_scanner;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
+import it.sauronsoftware.cron4j.Scheduler;
+
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.text.SimpleDateFormat;
@@ -38,17 +37,18 @@ public class TradeMeScanner implements Runnable {
 
 	private static final String TRADE_ME_SCANNER_XML = "TradeMeScanner.xml";
 
-	private final Properties props;
 	private final TradeMeScannerPersistence persistence;
 	private final TradeMeConnector connector;
+	private final Scheduler scheduler;
+
+	private final Map<String, String> searches;
+	private final boolean clearCache;
 
 	private JsonRootNode vcapServices;
 
 	private ResultHandler resultHandler;
 
 	private EmailProvider emailProvider;
-
-	private volatile boolean stopped;
 
 	public static void main(String[] args) {
 		List<String> argList = Arrays.asList(args);
@@ -88,7 +88,7 @@ public class TradeMeScanner implements Runnable {
 	}
 
 	public TradeMeScanner(String configFile) {
-		props = new EnvironmentBackedProperties(configFile, TRADE_ME_SCANNER);
+		Properties props = new EnvironmentBackedProperties(configFile, TRADE_ME_SCANNER);
 
 		if ("redis".equals(props.getProperty("persistence.method"))) {
 			persistence = new RedisPersistence(TRADE_ME_SCANNER,
@@ -107,10 +107,33 @@ public class TradeMeScanner implements Runnable {
 		}
 
 		connector = new TradeMeConnector(props, persistence);
+		connector.service = new ServiceBuilder().provider(TradeMeApi.class)
+				.apiKey(props.getProperty("consumer.key"))
+				.apiSecret(props.getProperty("consumer.secret")).build();
+
+		searches = new Hashtable<String, String>();
+		int index = 0;
+		String parameters = props
+				.getProperty("search." + index + ".parameters");
+		while (parameters != null) {
+			String title = props.getProperty("search." + index + ".title",
+					"<unspecified>");
+			searches.put(parameters, title);
+			System.out.println("Added search " + title + " with parameters "
+					+ parameters);
+
+			index = index + 1;
+			parameters = props.getProperty("search." + index + ".parameters");
+		}
+		
+		clearCache = "true".equals(props.getProperty("clearcache"));
 
 		resultHandler = new ResultHandler();
-
-		stopped = false;
+		
+		scheduler = new Scheduler();
+		String schedule = props.getProperty("search.schedule", "*/10 * * * *");
+		scheduler.schedule(schedule, this);
+		System.out.println("Set search schedule to \"" + schedule + "\".");
 	}
 
 	private JsonRootNode getVcapServices() {
@@ -131,104 +154,32 @@ public class TradeMeScanner implements Runnable {
 	}
 
 	private void runScanner(boolean clearCache, boolean interactive) {
-		final Thread mainThread = Thread.currentThread();
 		Runtime.getRuntime().addShutdownHook(new Thread() {
 			public void run() {
-				stopped = true;
-				mainThread.interrupt();
+				scheduler.stop();
 
-				try {
-					mainThread.join();
-				} catch (InterruptedException e) {
-				}
+				System.out.println("Terminated.");
 			}
 		});
 
-		if (clearCache || "true".equals(props.getProperty("clearcache"))) {
+		if (this.clearCache || clearCache) {
 			persistence.clearCache();
 
 			System.out.println("Cleared cache.");
 		}
-
-		int interval = Integer.parseInt(props.getProperty("search.interval"));
-		System.out.println("Set search interval to " + interval + " seconds.");
-
-		Map<String, String> searches = new Hashtable<String, String>();
-		int index = 0;
-		String parameters = props
-				.getProperty("search." + index + ".parameters");
-		while (parameters != null) {
-			String title = props.getProperty("search." + index + ".title",
-					"<unspecified>");
-			searches.put(parameters, title);
-			System.out.println("Added search " + title + " with parameters "
-					+ parameters);
-
-			index = index + 1;
-			parameters = props.getProperty("search." + index + ".parameters");
-		}
-
-		connector.service = new ServiceBuilder().provider(TradeMeApi.class)
-				.apiKey(props.getProperty("consumer.key"))
-				.apiSecret(props.getProperty("consumer.secret")).build();
 
 		connector.checkAuthorisation();
 
 		if (interactive) {
 			System.out.println("Starting in interactive mode...");
 
-			Thread interactiveThread = new Thread(this);
+			Thread interactiveThread = new Thread(new InteractiveThread());
 			interactiveThread.start();
 		}
 
-		Element result = null;
-		while (!stopped) {
-			System.out.println("Starting scanner run at "
-					+ SimpleDateFormat.getDateTimeInstance().format(
-							GregorianCalendar.getInstance().getTime()));
-
-			result = searchNewListings(searches, result);
-			result = searchNewListingsNoDate(searches, result);
-			result = searchNewQuestions(result);
-
-			if (result != null) {
-				String title = "";
-
-				int count = resultHandler.getItemCount(result
-						.getOwnerDocument());
-				if (count > 0) {
-					title = title + count + " new search results";
-				}
-
-				count = resultHandler.getQuestionCount(result
-						.getOwnerDocument());
-				if (count > 0) {
-					if (!title.equals("")) {
-						title = title + ", ";
-					}
-					title = title + count + " new questions";
-				}
-
-				title = "TradeMe Scanner: " + title;
-
-				emailProvider.sendEmail(title, resultHandler.toString(result),
-						resultHandler.toHtml(result));
-
-				result = null;
-
-				System.out.println("Email sent");
-			}
-
-			System.out.println("Finished scanner run at "
-					+ SimpleDateFormat.getDateTimeInstance().format(
-							GregorianCalendar.getInstance().getTime()));
-			try {
-				Thread.sleep(1000 * interval);
-			} catch (InterruptedException e) {
-			}
-		}
-
-		System.out.println("Terminated.");
+		scheduler.start();
+		
+		run();
 	}
 
 	private Element searchNewQuestions(Element result) {
@@ -551,22 +502,43 @@ public class TradeMeScanner implements Runnable {
 	}
 
 	public void run() {
-		String input = "";
-		BufferedReader inReader = new BufferedReader(new InputStreamReader(
-				System.in));
-		while (input != null) {
-			System.out.print("Enter [x] to exit:");
-			try {
-				input = inReader.readLine();
-			} catch (IOException e) {
-				throw new RuntimeException(e);
+		System.out.println("Starting scanner run at "
+				+ SimpleDateFormat.getDateTimeInstance().format(
+						GregorianCalendar.getInstance().getTime()));
+
+		Element result = searchNewListings(searches, null);
+		result = searchNewListingsNoDate(searches, result);
+		result = searchNewQuestions(result);
+
+		if (result != null) {
+			String title = "";
+
+			int count = resultHandler.getItemCount(result.getOwnerDocument());
+			if (count > 0) {
+				title = title + count + " new search results";
 			}
 
-			if ("x".equals(input)) {
-				System.exit(0);
+			count = resultHandler.getQuestionCount(result.getOwnerDocument());
+			if (count > 0) {
+				if (!title.equals("")) {
+					title = title + ", ";
+				}
+				title = title + count + " new questions";
 			}
 
-			System.out.println();
+			title = "TradeMe Scanner: " + title;
+
+			emailProvider.sendEmail(title, resultHandler.toString(result),
+					resultHandler.toHtml(result));
+
+			result = null;
+
+			System.out.println("Email sent");
 		}
+
+		System.out.println("Finished scanner run at "
+				+ SimpleDateFormat.getDateTimeInstance().format(
+						GregorianCalendar.getInstance().getTime()));
+
 	}
 }
