@@ -8,7 +8,7 @@
 	<entry key="consumer.secret">TradeMe Application Consumer Secret</entry>
 	<entry key="access.token">TradeMe User Access Token (optional)</entry>
 	<entry key="access.secret">TradeMe User Access Secret (optional)</entry>
-	<entry key="search.interval">600</entry>
+	<entry key="search.schedule">Schedule when to run search, formatted for cron4j, defaults to "*/10 * * * *"</entry>
 	<entry key="search.0.parameters">Search Parameters 1</entry>
 	<entry key="search.0.title">Search Title 1</entry>
 	<entry key="search.1.parameters">Search Parameters 2</entry>
