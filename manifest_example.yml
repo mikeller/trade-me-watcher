@@ -10,5 +10,5 @@ applications:
     trademescanner_email_method: sendgrid
     trademescanner_email_from: TradeMeScanner@042.ch
   services:
-  - ElephantSQL-rt
-  - SendGrid-k5
+  - ElephantSQL-sm
+  - SendGrid-kc
