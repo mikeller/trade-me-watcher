@@ -369,8 +369,8 @@ public class TradeMeScanner implements Runnable {
 								allItems.add(listingId);
 
 								float price = resultHandler.getPrice(item);
-								if (price <= search.getMaxPrice() || price == 0 
-										&& resultHandler.getBuyNowPrice(item) <= search.getMaxPrice()) {
+								if (Float.compare(price, search.getMaxPrice()) <= 0 || Float.compare(price , 0) == 0 
+										&& Float.compare(resultHandler.getBuyNowPrice(item), search.getMaxPrice()) <= 0) {
 									if (result == null) {
 										result = resultHandler
 												.createScanResultsDocument();
@@ -461,8 +461,8 @@ public class TradeMeScanner implements Runnable {
 							allItems.add(listingId);
 							
 							float price = resultHandler.getPrice(item);
-							if (price <= search.getMaxPrice() || price == 0 
-									&& resultHandler.getBuyNowPrice(item) <= search.getMaxPrice()) {
+							if (Float.compare(price, search.getMaxPrice()) <= 0 || Float.compare(price , 0) == 0 
+									&& Float.compare(resultHandler.getBuyNowPrice(item), search.getMaxPrice()) <= 0) {
 								if (result == null) {
 									result = resultHandler
 											.createScanResultsDocument();
