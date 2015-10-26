@@ -5,13 +5,12 @@ import it.sauronsoftware.cron4j.Scheduler;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.GregorianCalendar;
 import java.util.HashSet;
-import java.util.Hashtable;
 import java.util.List;
-import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 
@@ -41,7 +40,7 @@ public class TradeMeScanner implements Runnable {
 	private final TradeMeConnector connector;
 	private final Scheduler scheduler;
 
-	private final Map<String, String> searches;
+	private final List<TradeMeSearch> searches;
 	private final boolean clearCache;
 
 	private JsonRootNode vcapServices;
@@ -111,16 +110,30 @@ public class TradeMeScanner implements Runnable {
 				.apiKey(props.getProperty("consumer.key"))
 				.apiSecret(props.getProperty("consumer.secret")).build();
 
-		searches = new Hashtable<String, String>();
+		searches = new ArrayList<TradeMeSearch>();
 		int index = 0;
 		String parameters = props
 				.getProperty("search." + index + ".parameters");
 		while (parameters != null) {
 			String title = props.getProperty("search." + index + ".title",
 					"<unspecified>");
-			searches.put(parameters, title);
-			System.out.println("Added search " + title + " with parameters "
-					+ parameters);
+			float maxPrice = 0;
+			String propertyName = "search." + index + ".maxPrice";
+			String propertyValue = props.getProperty(propertyName, "0");
+			try {
+				maxPrice = Float.parseFloat(propertyValue);
+			} catch (NumberFormatException e) {
+				System.out.println("Ignored illegal value for property \"" + propertyName + "\": " 
+						+ propertyValue + ". Please specify a float." );
+			}
+			searches.add(new TradeMeSearch(title, parameters, maxPrice));
+			if (maxPrice > 0) {
+				System.out.println("Added search " + title + " with parameters "
+						+ parameters + ", maximum price " + maxPrice);
+			} else {
+				System.out.println("Added search " + title + " with parameters "
+						+ parameters);				
+			}
 
 			index = index + 1;
 			parameters = props.getProperty("search." + index + ".parameters");
@@ -297,7 +310,7 @@ public class TradeMeScanner implements Runnable {
 		return resultItem;
 	}
 
-	private Element searchNewListings(Map<String, String> searches,
+	private Element searchNewListings(List<TradeMeSearch> searches,
 			Element result) {
 		PersistenceObject seenItems = persistence.getSeenItems();
 		try {
@@ -311,9 +324,8 @@ public class TradeMeScanner implements Runnable {
 			PersistenceObject latestStartDates = persistence
 					.getLatestStartDates();
 			try {
-				for (String parameters : searches.keySet()) {
-					String latestDateString = latestStartDates.get(searches
-							.get(parameters));
+				for (TradeMeSearch search: searches) {
+					String latestDateString = latestStartDates.get(String.valueOf(search.hashCode()));
 					Calendar latestDate = null;
 					if (latestDateString != null) {
 						latestDate = DatatypeConverter
@@ -321,7 +333,7 @@ public class TradeMeScanner implements Runnable {
 					}
 
 					String request = "https://api.trademe.co.nz/v1/Search/General.xml?photo_size=List&"
-							+ parameters;
+							+ search.getParameters();
 
 					if (latestDate != null) {
 						request = request + "&date_from="
@@ -338,8 +350,8 @@ public class TradeMeScanner implements Runnable {
 
 						searchResult = null;
 
-						index = 0;
 						int newItems = 0;
+						index = 0;
 						while (index < items.getLength()) {
 							Element item = ((Element) items.item(index));
 							String listingId = resultHandler.getListingId(item);
@@ -356,15 +368,20 @@ public class TradeMeScanner implements Runnable {
 							if (!allItems.contains(listingId)) {
 								allItems.add(listingId);
 
-								if (result == null) {
-									result = resultHandler
-											.createScanResultsDocument();
+								float price = resultHandler.getPrice(item);
+								if (price <= search.getMaxPrice() || price == 0 
+										&& resultHandler.getBuyNowPrice(item) <= search.getMaxPrice()) {
+									if (result == null) {
+										result = resultHandler
+												.createScanResultsDocument();
+									}
+									
+									searchResult = resultHandler.addItem(
+											searchResult, result,
+											search.getTitle(), item);
+									
+									newItems = newItems + 1;
 								}
-								searchResult = resultHandler.addItem(
-										searchResult, result,
-										searches.get(parameters), item);
-
-								newItems = newItems + 1;
 							}
 
 							index = index + 1;
@@ -372,7 +389,7 @@ public class TradeMeScanner implements Runnable {
 
 						if (latestDate != null) {
 							latestStartDates
-									.put(searches.get(parameters),
+									.put(String.valueOf(search.hashCode()),
 											DatatypeConverter
 													.printDateTime(latestDate));
 						}
@@ -380,7 +397,7 @@ public class TradeMeScanner implements Runnable {
 						System.out.println("Found " + items.getLength()
 								+ " items, " + newItems
 								+ " new items for search \""
-								+ searches.get(parameters) + "\".");
+								+ search.getTitle() + "\".");
 					}
 				}
 			} finally {
@@ -408,7 +425,7 @@ public class TradeMeScanner implements Runnable {
 		return result;
 	}
 
-	private Element searchNewListingsNoDate(Map<String, String> searches,
+	private Element searchNewListingsNoDate(List<TradeMeSearch> searches,
 			Element result) {
 		PersistenceObject seenItems = persistence.getSeenItems();
 		try {
@@ -419,10 +436,10 @@ public class TradeMeScanner implements Runnable {
 			Calendar now = GregorianCalendar.getInstance();
 			Element searchResult;
 
-			for (String parameters : searches.keySet()) {
+			for (TradeMeSearch search: searches) {
 				Response response = connector
 						.sendGetRequest("https://api.trademe.co.nz/v1/Search/General.xml?photo_size=List&"
-								+ parameters);
+								+ search.getParameters());
 
 				if (!checkError(response)) {
 					Document document = resultHandler.getBody(response
@@ -431,8 +448,8 @@ public class TradeMeScanner implements Runnable {
 
 					searchResult = null;
 
-					index = 0;
 					int newItems = 0;
+					index = 0;
 					while (index < items.getLength()) {
 						Element item = ((Element) items.item(index));
 						String listingId = resultHandler.getListingId(item);
@@ -442,15 +459,19 @@ public class TradeMeScanner implements Runnable {
 								DatatypeConverter.printDateTime(now));
 						if (!allItems.contains(listingId)) {
 							allItems.add(listingId);
-
-							if (result == null) {
-								result = resultHandler
-										.createScanResultsDocument();
+							
+							float price = resultHandler.getPrice(item);
+							if (price <= search.getMaxPrice() || price == 0 
+									&& resultHandler.getBuyNowPrice(item) <= search.getMaxPrice()) {
+								if (result == null) {
+									result = resultHandler
+											.createScanResultsDocument();
+								}
+								searchResult = resultHandler.addItem(searchResult,
+										result, search.getTitle(), item);
+								
+								newItems = newItems + 1;
 							}
-							searchResult = resultHandler.addItem(searchResult,
-									result, searches.get(parameters), item);
-
-							newItems = newItems + 1;
 						}
 
 						index = index + 1;
@@ -459,7 +480,7 @@ public class TradeMeScanner implements Runnable {
 					System.out.println("Found " + items.getLength()
 							+ " items (not restricted by start date), "
 							+ newItems + " new items for search \""
-							+ searches.get(parameters) + "\".");
+							+ search.getTitle() + "\".");
 				}
 			}
 

@@ -54,6 +54,8 @@ public class ResultHandler {
 	private final XPathExpression watchlistItemExpr;
 	private final XPathExpression listingQuestionsExpr;
 	private final XPathExpression listingIdExpr;
+	private final XPathExpression priceExpr;
+	private final XPathExpression buyNowPriceExpr;
 	private final XPathExpression titleExpr;
 	private final XPathExpression questionIdExpr;
 	private final XPathExpression startDateExpr;
@@ -116,6 +118,14 @@ public class ResultHandler {
 			xPath = xPathFactory.newXPath();
 			xPath.setNamespaceContext(ns);
 			listingIdExpr = xPath.compile("./tm:ListingId");
+
+			xPath = xPathFactory.newXPath();
+			xPath.setNamespaceContext(ns);
+			priceExpr = xPath.compile("./tm:StartPrice");
+
+			xPath = xPathFactory.newXPath();
+			xPath.setNamespaceContext(ns);
+			buyNowPriceExpr = xPath.compile("./tm:BuyNowPrice");
 
 			xPath = xPathFactory.newXPath();
 			xPath.setNamespaceContext(ns);
@@ -401,4 +411,19 @@ public class ResultHandler {
 		return output.toString();
 	}
 
+	public float getPrice(Element item) {
+		try {
+			return Float.parseFloat((String)priceExpr.evaluate(item, XPathConstants.STRING));
+		} catch (XPathExpressionException | NumberFormatException  e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+	public float getBuyNowPrice(Element item) {
+		try {
+			return Float.parseFloat((String)buyNowPriceExpr.evaluate(item, XPathConstants.STRING));
+		} catch (XPathExpressionException | NumberFormatException  e) {
+			throw new RuntimeException(e);
+		}
+	}
 }

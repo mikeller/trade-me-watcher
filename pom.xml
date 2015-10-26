@@ -4,7 +4,7 @@
 
 	<groupId>ch.ike.trademe_scanner</groupId>
 	<artifactId>trademe_scanner</artifactId>
-	<version>0.6</version>
+	<version>0.7.0</version>
 	<packaging>jar</packaging>
 	<build>
 		<plugins>
@@ -95,6 +95,6 @@
 		</dependency>
 	</dependencies>
 	<scm>
-		<url>https://trade-me-watcher.googlecode.com/svn/</url>
+		<url>https://github.com/mikeller/trade-me-watcher.git</url>
 	</scm>
 </project>
