@@ -4,6 +4,7 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URL;
 import java.util.InvalidPropertiesFormatException;
 import java.util.Properties;
 
@@ -22,17 +23,23 @@ public class EnvironmentBackedProperties extends Properties {
 				try {
 					in = new FileInputStream(configFile);
 				} catch (FileNotFoundException e) {
-					in = new StreamSource(getClass().getResource(
-							"/" + configFile).toString())
-							.getInputStream();
+					URL fileUrl = getClass().getResource("/" + configFile);
+					if (fileUrl != null) {
+						in = new StreamSource(fileUrl.toString()).getInputStream();
+					}
 				}
-				try {
-					loadFromXML(in);
-				} catch (InvalidPropertiesFormatException e) {
-					throw new RuntimeException(e);
+				
+				if (in != null) {
+					try {
+						loadFromXML(in);
+					} catch (InvalidPropertiesFormatException e) {
+						throw new RuntimeException(e);
+					}
 				}
 			} finally {
-				in.close();
+				if (in != null) {
+					in.close();
+				}
 			}
 		} catch (IOException e) {
 			throw new RuntimeException(e);
