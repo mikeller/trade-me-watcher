@@ -413,7 +413,14 @@ public class ResultHandler {
 
 	public float getPrice(Element item) {
 		try {
-			return Float.parseFloat((String)priceExpr.evaluate(item, XPathConstants.STRING));
+			float result = 0;
+			String resultStr = (String)priceExpr.evaluate(item, XPathConstants.STRING);
+			try {
+				result = Float.parseFloat(resultStr);
+			} catch (NumberFormatException e) {
+			}
+
+			return result;
 		} catch (XPathExpressionException | NumberFormatException  e) {
 			throw new RuntimeException(e);
 		}
@@ -421,7 +428,14 @@ public class ResultHandler {
 
 	public float getBuyNowPrice(Element item) {
 		try {
-			return Float.parseFloat((String)buyNowPriceExpr.evaluate(item, XPathConstants.STRING));
+			float result = 0;
+			String resultStr = (String)buyNowPriceExpr.evaluate(item, XPathConstants.STRING);
+			try {
+				result = Float.parseFloat(resultStr);
+			} catch (NumberFormatException e) {
+			}
+
+			return result;
 		} catch (XPathExpressionException | NumberFormatException  e) {
 			throw new RuntimeException(e);
 		}
