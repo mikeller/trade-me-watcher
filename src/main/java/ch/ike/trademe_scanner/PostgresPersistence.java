@@ -1,5 +1,7 @@
 package ch.ike.trademe_scanner;
 
+import it.sauronsoftware.cron4j.Scheduler;
+
 import java.net.URI;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -14,13 +16,15 @@ import argo.jdom.JsonNode;
 import argo.jdom.JsonRootNode;
 
 public class PostgresPersistence implements TradeMeScannerPersistence,
-		PostgresConstants {
+		PostgresConstants, Runnable {
 	private final String prefix;
 	private final Connection connection;
 
 	private PersistenceObject seenQuestions;
 	private PersistenceObject seenItems;
 	private PersistenceObject latestStartDates;
+
+	private final Scheduler scheduler;
 
 	public PostgresPersistence(String prefix, JsonRootNode vcapServices) {
 		this.prefix = prefix + "_";
@@ -59,8 +63,19 @@ public class PostgresPersistence implements TradeMeScannerPersistence,
 			throw new RuntimeException(e);
 		}
 
+		scheduler = new Scheduler();
+		String schedule = "5 3 * * *";
+		scheduler.schedule(schedule, this);
+		scheduler.start();
+		System.out.println("Set database cleanup schedule to \"" + schedule + "\".");
+
 		System.out.println("Set up persistence with postgres SQL on "
 				+ uri.getHost() + ":" + uri.getPort() + ".");
+	}
+
+	public void run() {
+		clearCache(false);
+		System.out.println("Cleared database cache.");
 	}
 
 	private void checkCreateTable(String tableName, Statement statement)
@@ -71,26 +86,44 @@ public class PostgresPersistence implements TradeMeScannerPersistence,
 		boolean tableExists = resultSet.next() && (resultSet.getInt("table_count") != 0);
 		resultSet.close();
 		if (!tableExists) {
-			statement
-					.executeUpdate("create table " + tableName + " (" + PK
-							+ " varchar(256) primary key, " + VALUE
-							+ " varchar(1024))");
+			statement.executeUpdate("create table " + tableName + " ("
+						+ PK + " varchar(256) primary key, "
+						+ VALUE + " varchar(1024), "
+						+ CREATED_TIMESTAMP + " timestamp default now()"
+						+ ")");
 
 			System.out.println("Created postgres table " + tableName + ".");
 		}
 	}
 
 	@Override
+	public void stop() {
+		scheduler.stop();
+		System.out.println("Stopped database cleanup schedule.");
+	}
+
+	@Override
 	public void clearCache() {
+		clearCache(true);
+	}
+
+	private void clearCache(boolean removeAll) {
+		String whereClause = "";
+		if (!removeAll) {
+			whereClause = whereClause + " where " + CREATED_TIMESTAMP + " < now() - interval '1 month'";
+		}
+
 		try {
 			Statement statement = connection.createStatement();
 			try {
-				statement.executeUpdate("delete from " + prefix + SEEN_ITEMS);
+				statement.executeUpdate("delete from " + prefix + SEEN_ITEMS + whereClause);
+
+				statement.executeUpdate("delete from " + prefix + SEEN_QUESTIONS + whereClause);
 
 				statement.executeUpdate("delete from " + prefix
-						+ LATEST_START_DATES);
+						+ LATEST_START_DATES + whereClause);
 
-				statement.executeUpdate("delete from " + prefix + ACCESS_TOKEN);
+				statement.executeUpdate("delete from " + prefix + ACCESS_TOKEN + whereClause);
 			} finally {
 				statement.close();
 			}

@@ -38,6 +38,10 @@ public class RedisPersistence implements TradeMeScannerPersistence {
 	}
 
 	@Override
+	public void stop() {
+	}
+
+	@Override
 	public void clearCache() {
 		Jedis jedis = pool.getResource();
 		jedis.del(prefix + SEEN_ITEMS, prefix + LATEST_START_DATES, prefix

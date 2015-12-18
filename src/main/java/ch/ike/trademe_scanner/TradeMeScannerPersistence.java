@@ -12,6 +12,8 @@ public interface TradeMeScannerPersistence {
 	static final String SECRET = "Secret";
 	static final String TOKEN = "Token";
 
+	void stop();
+
 	void clearCache();
 
 	Entry<String, String> getAccessToken();

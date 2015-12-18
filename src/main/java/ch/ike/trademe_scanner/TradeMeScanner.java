@@ -119,7 +119,7 @@ public class TradeMeScanner implements Runnable {
 					"<unspecified>");
 			float maxPrice = 0;
 			String propertyName = "search." + index + ".maxPrice";
-			String propertyValue = props.getProperty(propertyName, "0");
+			String propertyValue = props.getProperty(propertyName, "-1");
 			try {
 				maxPrice = Float.parseFloat(propertyValue);
 			} catch (NumberFormatException e) {
@@ -374,7 +374,7 @@ public class TradeMeScanner implements Runnable {
 									buyNowPrice = resultHandler.getBuyNowPrice(item);
 								} catch (NullPointerException e) {
 								}
-								if (price > 0 && price <= search.getMaxPrice() || buyNowPrice > 0 && buyNowPrice <= search.getMaxPrice()) {
+								if (search.getMaxPrice() < 0 || price > 0 && price <= search.getMaxPrice() || buyNowPrice > 0 && buyNowPrice <= search.getMaxPrice()) {
 									if (result == null) {
 										result = resultHandler
 												.createScanResultsDocument();
@@ -470,7 +470,7 @@ public class TradeMeScanner implements Runnable {
 								buyNowPrice = resultHandler.getBuyNowPrice(item);
 							} catch (NullPointerException e) {
 							}
-							if (price > 0 && price <= search.getMaxPrice() || buyNowPrice > 0 && buyNowPrice <= search.getMaxPrice()) {
+							if (search.getMaxPrice() < 0 || price > 0 && price <= search.getMaxPrice() || buyNowPrice > 0 && buyNowPrice <= search.getMaxPrice()) {
 								if (result == null) {
 									result = resultHandler
 											.createScanResultsDocument();

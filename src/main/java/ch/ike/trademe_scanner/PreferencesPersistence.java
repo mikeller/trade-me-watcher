@@ -19,6 +19,10 @@ public class PreferencesPersistence implements TradeMeScannerPersistence {
 	}
 
 	@Override
+	public void stop() {
+	}
+
+	@Override
 	public void clearCache() {
 		try {
 			prefs.node(SEEN_ITEMS).removeNode();
