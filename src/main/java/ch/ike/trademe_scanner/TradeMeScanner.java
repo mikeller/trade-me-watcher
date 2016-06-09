@@ -539,23 +539,24 @@ public class TradeMeScanner implements Runnable {
 		result = searchNewListingsNoDate(searches, result);
 		result = searchNewQuestions(result);
 
+		String timeStamp = SimpleDateFormat.getDateTimeInstance().format(
+			GregorianCalendar.getInstance().getTime());
+
 		if (result != null) {
-			String title = "";
+			ArrayList<String> titleElements = new ArrayList<String>();
 
 			int count = resultHandler.getItemCount(result.getOwnerDocument());
 			if (count > 0) {
-				title = title + count + " new search results";
+				String searchList = String.join(", ", resultHandler.getSearchList(result.getOwnerDocument()));
+				titleElements.add(count + " new search results in " + searchList);
 			}
 
 			count = resultHandler.getQuestionCount(result.getOwnerDocument());
 			if (count > 0) {
-				if (!title.equals("")) {
-					title = title + ", ";
-				}
-				title = title + count + " new questions";
+				titleElements.add(count + " new questions");
 			}
 
-			title = "TradeMe Scanner: " + title;
+			String title = "TradeMe Scanner: " + String.join(", ", titleElements) + " at " + timeStamp;
 
 			emailProvider.sendEmail(title, resultHandler.toString(result),
 					resultHandler.toHtml(result));
@@ -565,9 +566,6 @@ public class TradeMeScanner implements Runnable {
 			System.out.println("Email sent");
 		}
 
-		System.out.println("Finished scanner run at "
-				+ SimpleDateFormat.getDateTimeInstance().format(
-						GregorianCalendar.getInstance().getTime()));
-
+		System.out.println("Finished scanner run at " + timeStamp);
 	}
 }

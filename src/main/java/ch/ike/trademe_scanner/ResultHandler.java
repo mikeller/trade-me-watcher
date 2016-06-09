@@ -5,6 +5,8 @@ import java.io.StringReader;
 import java.io.StringWriter;
 import java.util.Calendar;
 import java.util.Iterator;
+import java.util.List;
+import java.util.ArrayList;
 
 import javax.xml.bind.DatatypeConverter;
 import javax.xml.namespace.NamespaceContext;
@@ -62,6 +64,7 @@ public class ResultHandler {
 	private final XPathExpression listingContentsExpr;
 	private final XPathExpression questionCountExpr;
 	private final XPathExpression itemCountExpr;
+	private final XPathExpression searchListExpr;
 
 	private static final TransformerFactory tFactory = TransformerFactory
 			.newInstance();
@@ -155,6 +158,11 @@ public class ResultHandler {
 			xPath.setNamespaceContext(ns);
 			itemCountExpr = xPath
 					.compile("/ScanResults/Searches/Search/tm:Listing");
+
+			xPath = xPathFactory.newXPath();
+			xPath.setNamespaceContext(ns);
+			searchListExpr = xPath
+					.compile("/ScanResults/Searches/Search/@Parameters");
 
 			xPath = xPathFactory.newXPath();
 			xPath.setNamespaceContext(ns);
@@ -378,6 +386,24 @@ public class ResultHandler {
 		try {
 			return ((NodeList) itemCountExpr.evaluate(document,
 					XPathConstants.NODESET)).getLength();
+		} catch (XPathExpressionException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+	public List<String> getSearchList(Document document) {
+		try {
+			NodeList results = ((NodeList) searchListExpr.evaluate(document,
+					XPathConstants.NODESET));
+			ArrayList<String> searchList = new ArrayList<String>();
+			int i = 0;
+			while (i < results.getLength()) {
+				searchList.add(results.item(i).getNodeValue());
+
+				i = i + 1;
+			}
+
+			return searchList;
 		} catch (XPathExpressionException e) {
 			throw new RuntimeException(e);
 		}

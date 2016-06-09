@@ -2,7 +2,7 @@ applications:
 - name: trade-me-watcher
   memory: 256M
   instances: 1
-  path: ./target/trademe_scanner-0.7.5-jar-with-dependencies.jar
+  path: ./target/trademe_scanner-0.7.6-jar-with-dependencies.jar
   buildpack: java_buildpack
   no-route: true
   env:
