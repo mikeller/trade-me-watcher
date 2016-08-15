@@ -35,7 +35,7 @@ public class SendGridEmailProvider extends JavaxMailEmailProvider implements Ema
 
 		System.out.println("Setting up mail out using SendGrid, using username " + username + " on " + hostname + ".");
 
-		return Session.getDefaultInstance(properties, new Authenticator() {
+		return Session.getInstance(properties, new Authenticator() {
 		       public PasswordAuthentication getPasswordAuthentication() {
 		           return new PasswordAuthentication(username, password);		
 		       }
