@@ -176,8 +176,13 @@ public class TradeMeScanner implements Runnable {
 		});
 
 		if (this.clearCache || clearCache) {
-			persistence.clearCache();
-
+			TradeMeScannerPersistenceConnection connection = persistence.getConnection();
+			try {		
+				persistence.clearCache(connection);
+			} finally {
+				connection.close();
+			}
+			
 			System.out.println("Cleared cache.");
 		}
 
@@ -195,8 +200,8 @@ public class TradeMeScanner implements Runnable {
 		run();
 	}
 
-	private Element searchNewQuestions(Element result) {
-		PersistenceObject seenQuestions = persistence.getSeenQuestions();
+	private Element searchNewQuestions(Element result, TradeMeScannerPersistenceConnection connection) {
+			PersistenceObject seenQuestions = persistence.getSeenQuestions(connection);
 		try {
 			Set<String> allQuestions = new HashSet<String>(
 					seenQuestions.getKeys());
@@ -311,8 +316,8 @@ public class TradeMeScanner implements Runnable {
 	}
 
 	private Element searchNewListings(List<TradeMeSearch> searches,
-			Element result) {
-		PersistenceObject seenItems = persistence.getSeenItems();
+			Element result, TradeMeScannerPersistenceConnection connection) {
+		PersistenceObject seenItems = persistence.getSeenItems(connection);
 		try {
 			Set<String> allItems = new HashSet<String>(seenItems.getKeys());
 
@@ -322,7 +327,7 @@ public class TradeMeScanner implements Runnable {
 			Element searchResult;
 
 			PersistenceObject latestStartDates = persistence
-					.getLatestStartDates();
+					.getLatestStartDates(connection);
 			try {
 				for (TradeMeSearch search: searches) {
 					String latestDateString = latestStartDates.get(String.valueOf(search.hashCode()));
@@ -426,12 +431,13 @@ public class TradeMeScanner implements Runnable {
 		} finally {
 			seenItems.commit();
 		}
+		
 		return result;
 	}
 
 	private Element searchNewListingsNoDate(List<TradeMeSearch> searches,
-			Element result) {
-		PersistenceObject seenItems = persistence.getSeenItems();
+			Element result, TradeMeScannerPersistenceConnection connection) {
+		PersistenceObject seenItems = persistence.getSeenItems(connection);
 		try {
 			Set<String> allItems = new HashSet<String>(seenItems.getKeys());
 
@@ -531,41 +537,53 @@ public class TradeMeScanner implements Runnable {
 	}
 
 	public void run() {
-		System.out.println("Starting scanner run at "
-				+ SimpleDateFormat.getDateTimeInstance().format(
-						GregorianCalendar.getInstance().getTime()));
-
-		Element result = searchNewListings(searches, null);
-		result = searchNewListingsNoDate(searches, result);
-		result = searchNewQuestions(result);
-
 		String timeStamp = SimpleDateFormat.getDateTimeInstance().format(
-			GregorianCalendar.getInstance().getTime());
+				GregorianCalendar.getInstance().getTime());
+	
+		System.out.println("Starting scanner run at "
+				+ timeStamp);
 
-		if (result != null) {
-			ArrayList<String> titleElements = new ArrayList<String>();
-
-			int count = resultHandler.getItemCount(result.getOwnerDocument());
-			if (count > 0) {
-				String searchList = String.join(", ", resultHandler.getSearchList(result.getOwnerDocument()));
-				titleElements.add(count + " new search results in " + searchList);
+		try {
+			Element result = null;
+			
+			TradeMeScannerPersistenceConnection connection = persistence.getConnection();
+			try {
+				result = searchNewListings(searches, result, connection);
+				result = searchNewListingsNoDate(searches, result, connection);
+				result = searchNewQuestions(result, connection);
+			} finally {
+				connection.close();
 			}
-
-			count = resultHandler.getQuestionCount(result.getOwnerDocument());
-			if (count > 0) {
-				titleElements.add(count + " new questions");
+	
+			if (result != null) {
+				ArrayList<String> titleElements = new ArrayList<String>();
+	
+				int count = resultHandler.getItemCount(result.getOwnerDocument());
+				if (count > 0) {
+					String searchList = String.join(", ", resultHandler.getSearchList(result.getOwnerDocument()));
+					titleElements.add(count + " new search results in " + searchList);
+				}
+	
+				count = resultHandler.getQuestionCount(result.getOwnerDocument());
+				if (count > 0) {
+					titleElements.add(count + " new questions");
+				}
+	
+				String title = "TradeMe Scanner: " + String.join(", ", titleElements) + " at " + timeStamp;
+	
+				emailProvider.sendEmail(title, resultHandler.toString(result),
+						resultHandler.toHtml(result));
+	
+				result = null;
+	
+				System.out.println("Email sent");
 			}
-
-			String title = "TradeMe Scanner: " + String.join(", ", titleElements) + " at " + timeStamp;
-
-			emailProvider.sendEmail(title, resultHandler.toString(result),
-					resultHandler.toHtml(result));
-
-			result = null;
-
-			System.out.println("Email sent");
+		} catch (Exception e) {
+			System.out.println("Scanner run failed with exception " + e.getMessage());
+			e.printStackTrace(System.out);
 		}
 
-		System.out.println("Finished scanner run at " + timeStamp);
+		System.out.println("Finished scanner run at " + SimpleDateFormat.getDateTimeInstance().format(
+				GregorianCalendar.getInstance().getTime()));
 	}
 }

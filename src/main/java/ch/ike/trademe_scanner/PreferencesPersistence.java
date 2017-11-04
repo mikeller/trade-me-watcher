@@ -19,11 +19,7 @@ public class PreferencesPersistence implements TradeMeScannerPersistence {
 	}
 
 	@Override
-	public void stop() {
-	}
-
-	@Override
-	public void clearCache() {
+	public void clearCache(TradeMeScannerPersistenceConnection connection) {
 		try {
 			prefs.node(SEEN_ITEMS).removeNode();
 			prefs.node(LATEST_START_DATES).removeNode();
@@ -34,21 +30,24 @@ public class PreferencesPersistence implements TradeMeScannerPersistence {
 		}
 	}
 
-	public PersistenceObject getSeenQuestions() {
+	@Override
+	public PersistenceObject getSeenQuestions(TradeMeScannerPersistenceConnection connection) {
 		if (seenQuestions == null) {
 			seenQuestions = new PreferencesPersistenceObject(prefs.node(SEEN_QUESTIONS));
 		}
 		return seenQuestions;
 	}
 
-	public PersistenceObject getSeenItems() {
+	@Override
+	public PersistenceObject getSeenItems(TradeMeScannerPersistenceConnection connection) {
 		if (seenItems == null) {
 			seenItems = new PreferencesPersistenceObject(prefs.node(SEEN_ITEMS));
 		}
 		return seenItems;
 	}
 
-	public PersistenceObject getLatestStartDates() {
+	@Override
+	public PersistenceObject getLatestStartDates(TradeMeScannerPersistenceConnection connection) {
 		if (latestStartDates == null) {
 			latestStartDates = new PreferencesPersistenceObject(prefs.node(LATEST_START_DATES));
 		}
@@ -56,7 +55,7 @@ public class PreferencesPersistence implements TradeMeScannerPersistence {
 	}
 
 	@Override
-	public Entry<String, String> getAccessToken() {
+	public Entry<String, String> getAccessToken(TradeMeScannerPersistenceConnection connection) {
 		Entry<String, String> result = null;
 		try {
 			if (prefs.nodeExists(ACCESS_TOKEN)) {
@@ -70,7 +69,7 @@ public class PreferencesPersistence implements TradeMeScannerPersistence {
 	}
 
 	@Override
-	public void setAccessToken(String token, String secret) {
+	public void setAccessToken(String token, String secret, TradeMeScannerPersistenceConnection connection) {
 		prefs.node(ACCESS_TOKEN).put(TOKEN, token);
 		prefs.node(ACCESS_TOKEN).put(SECRET, secret);
 		try {
@@ -81,7 +80,7 @@ public class PreferencesPersistence implements TradeMeScannerPersistence {
 	}
 
 	@Override
-	public void deleteAccessToken() {
+	public void deleteAccessToken(TradeMeScannerPersistenceConnection connection) {
 		try {
 			prefs.node(ACCESS_TOKEN).removeNode();
 			prefs.flush();
@@ -90,4 +89,8 @@ public class PreferencesPersistence implements TradeMeScannerPersistence {
 		}
 	}
 
+	@Override
+	public TradeMeScannerPersistenceConnection getConnection() {
+		return null;
+	}
 }

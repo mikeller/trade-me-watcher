@@ -1,6 +1,5 @@
 package ch.ike.trademe_scanner;
 
-import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -10,7 +9,7 @@ import java.util.HashSet;
 public class PostgresPersistenceObject implements PersistenceObject,
 		PostgresConstants {
 	private final String tableName;
-	private final Connection connection;
+	private final PostgresPersistenceConnection connection;
 
 	private PreparedStatement keysStatement;
 	private PreparedStatement getStatement;
@@ -18,7 +17,7 @@ public class PostgresPersistenceObject implements PersistenceObject,
 	private PreparedStatement insertStatement;
 	private PreparedStatement deleteStatement;
 
-	public PostgresPersistenceObject(Connection connection, String tableName) {
+	public PostgresPersistenceObject(PostgresPersistenceConnection connection, String tableName) {
 		this.connection = connection;
 		this.tableName = tableName;
 	}
@@ -28,7 +27,7 @@ public class PostgresPersistenceObject implements PersistenceObject,
 		Collection<String> result = new HashSet<String>();
 		try {
 			if (keysStatement == null) {
-				keysStatement = connection.prepareStatement("select " + PK
+				keysStatement = connection.getConnection().prepareStatement("select " + PK
 						+ " from " + tableName);
 			}
 
@@ -48,7 +47,7 @@ public class PostgresPersistenceObject implements PersistenceObject,
 	public void put(String key, String value) {
 		try {
 			if (updateStatement == null) {
-				updateStatement = connection.prepareStatement("update "
+				updateStatement = connection.getConnection().prepareStatement("update "
 						+ tableName + " set " + VALUE + " = ? where " + PK
 						+ " = ?");
 			}
@@ -58,7 +57,7 @@ public class PostgresPersistenceObject implements PersistenceObject,
 			int rows = updateStatement.executeUpdate();
 			if (rows == 0) {
 				if (insertStatement == null) {
-					insertStatement = connection
+					insertStatement = connection.getConnection()
 							.prepareStatement("insert into " + tableName + " ("
 									+ VALUE + ", " + PK + ") values (?, ?)");
 				}
@@ -76,7 +75,7 @@ public class PostgresPersistenceObject implements PersistenceObject,
 		String result = null;
 		try {
 			if (getStatement == null) {
-				getStatement = connection.prepareStatement("select " + VALUE
+				getStatement = connection.getConnection().prepareStatement("select " + VALUE
 						+ " from " + tableName + " where " + PK + " = ?");
 			}
 
@@ -97,7 +96,7 @@ public class PostgresPersistenceObject implements PersistenceObject,
 	public void remove(String key) {
 		try {
 			if (deleteStatement == null) {
-				deleteStatement = connection.prepareStatement("delete from "
+				deleteStatement = connection.getConnection().prepareStatement("delete from "
 						+ tableName + " where " + PK + " = ?");
 			}
 

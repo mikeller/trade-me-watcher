@@ -4,28 +4,27 @@ import java.util.Map.Entry;
 
 
 public interface TradeMeScannerPersistence {
-
 	static final String LATEST_START_DATES = "LatestStartDates";
 	static final String SEEN_ITEMS = "SeenItems";
 	static final String SEEN_QUESTIONS = "SeenQuestions";
 	static final String ACCESS_TOKEN = "AccessToken";
 	static final String SECRET = "Secret";
 	static final String TOKEN = "Token";
+	
+	TradeMeScannerPersistenceConnection getConnection();
 
-	void stop();
+	void clearCache(TradeMeScannerPersistenceConnection connection);
 
-	void clearCache();
+	Entry<String, String> getAccessToken(TradeMeScannerPersistenceConnection connection);
 
-	Entry<String, String> getAccessToken();
+	void setAccessToken(String token, String secret, TradeMeScannerPersistenceConnection connection);
 
-	void setAccessToken(String token, String secret);
+	void deleteAccessToken(TradeMeScannerPersistenceConnection connection);
 
-	void deleteAccessToken();
+	PersistenceObject getSeenQuestions(TradeMeScannerPersistenceConnection connection);
 
-	PersistenceObject getSeenQuestions();
+	PersistenceObject getSeenItems(TradeMeScannerPersistenceConnection connection);
 
-	PersistenceObject getSeenItems();
-
-	PersistenceObject getLatestStartDates();
+	PersistenceObject getLatestStartDates(TradeMeScannerPersistenceConnection connection);
 
 }

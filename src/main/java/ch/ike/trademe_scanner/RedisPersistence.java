@@ -3,12 +3,12 @@ package ch.ike.trademe_scanner;
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.Map.Entry;
 
+import argo.jdom.JsonNode;
+import argo.jdom.JsonRootNode;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.JedisPoolConfig;
 import redis.clients.jedis.Protocol;
-import argo.jdom.JsonNode;
-import argo.jdom.JsonRootNode;
 
 public class RedisPersistence implements TradeMeScannerPersistence {
 	private final String prefix;
@@ -38,11 +38,7 @@ public class RedisPersistence implements TradeMeScannerPersistence {
 	}
 
 	@Override
-	public void stop() {
-	}
-
-	@Override
-	public void clearCache() {
+	public void clearCache(TradeMeScannerPersistenceConnection connection) {
 		Jedis jedis = pool.getResource();
 		jedis.del(prefix + SEEN_ITEMS, prefix + LATEST_START_DATES, prefix
 				+ SEEN_QUESTIONS);
@@ -51,7 +47,7 @@ public class RedisPersistence implements TradeMeScannerPersistence {
 	}
 
 	@Override
-	public Entry<String, String> getAccessToken() {
+	public Entry<String, String> getAccessToken(TradeMeScannerPersistenceConnection connection) {
 		Entry<String, String> result = null;
 		Jedis jedis = pool.getResource();
 
@@ -66,7 +62,7 @@ public class RedisPersistence implements TradeMeScannerPersistence {
 	}
 
 	@Override
-	public void setAccessToken(String token, String secret) {
+	public void setAccessToken(String token, String secret, TradeMeScannerPersistenceConnection connection) {
 		Jedis jedis = pool.getResource();
 
 		jedis.hset(prefix + ACCESS_TOKEN, TOKEN, token);
@@ -76,7 +72,7 @@ public class RedisPersistence implements TradeMeScannerPersistence {
 	}
 
 	@Override
-	public void deleteAccessToken() {
+	public void deleteAccessToken(TradeMeScannerPersistenceConnection connection) {
 		Jedis jedis = pool.getResource();
 
 		jedis.del(prefix + ACCESS_TOKEN);
@@ -85,7 +81,7 @@ public class RedisPersistence implements TradeMeScannerPersistence {
 	}
 
 	@Override
-	public PersistenceObject getSeenQuestions() {
+	public PersistenceObject getSeenQuestions(TradeMeScannerPersistenceConnection connection) {
 		if (seenQuestions == null) {
 			seenQuestions = new RedisPersistenceObject(pool, prefix
 					+ SEEN_QUESTIONS);
@@ -94,7 +90,7 @@ public class RedisPersistence implements TradeMeScannerPersistence {
 	}
 
 	@Override
-	public PersistenceObject getSeenItems() {
+	public PersistenceObject getSeenItems(TradeMeScannerPersistenceConnection connection) {
 		if (seenItems == null) {
 			seenItems = new RedisPersistenceObject(pool, prefix + SEEN_ITEMS);
 		}
@@ -102,12 +98,17 @@ public class RedisPersistence implements TradeMeScannerPersistence {
 	}
 
 	@Override
-	public PersistenceObject getLatestStartDates() {
+	public PersistenceObject getLatestStartDates(TradeMeScannerPersistenceConnection connection) {
 		if (latestStartDates == null) {
 			latestStartDates = new RedisPersistenceObject(pool, prefix
 					+ LATEST_START_DATES);
 		}
 		return latestStartDates;
+	}
+
+	@Override
+	public TradeMeScannerPersistenceConnection getConnection() {
+		return null;
 	}
 
 }
